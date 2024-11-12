@@ -17,102 +17,101 @@
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/map.hpp>
 
-namespace DBoW2 {
-
-/// Id of words
-typedef unsigned int WordId;
-
-/// Value of a word
-typedef double WordValue;
-
-/// Id of nodes in the vocabulary treee
-typedef unsigned int NodeId;
-
-/// L-norms for normalization
-enum LNorm
+namespace DBoW2
 {
-  L1,
-  L2
-};
 
-/// Weighting type
-enum WeightingType
-{
-  TF_IDF,
-  TF,
-  IDF,
-  BINARY
-};
+	/// Id of words
+	typedef unsigned int WordId;
 
-/// Scoring type
-enum ScoringType
-{
-  L1_NORM,
-  L2_NORM,
-  CHI_SQUARE,
-  KL,
-  BHATTACHARYYA,
-  DOT_PRODUCT,
-};
+	/// Value of a word
+	typedef double WordValue;
 
-/// Vector of words to represent images
-class BowVector: 
-	public std::map<WordId, WordValue>
-{
-    friend class boost::serialization::access;
-    template<class Archive>
-    void serialize(Archive& ar, const int version)
-    {
-        ar & boost::serialization::base_object<std::map<WordId, WordValue> >(*this);
-    }
+	/// Id of nodes in the vocabulary treee
+	typedef unsigned int NodeId;
 
-public:
+	/// L-norms for normalization
+	enum LNorm
+	{
+		L1,
+		L2
+	};
 
-	/** 
-	 * Constructor
-	 */
-	BowVector(void);
+	/// Weighting type
+	enum WeightingType
+	{
+		TF_IDF,
+		TF,
+		IDF,
+		BINARY
+	};
 
-	/**
-	 * Destructor
-	 */
-	~BowVector(void);
-	
-	/**
-	 * Adds a value to a word value existing in the vector, or creates a new
-	 * word with the given value
-	 * @param id word id to look for
-	 * @param v value to create the word with, or to add to existing word
-	 */
-	void addWeight(WordId id, WordValue v);
-	
-	/**
-	 * Adds a word with a value to the vector only if this does not exist yet
-	 * @param id word id to look for
-	 * @param v value to give to the word if this does not exist
-	 */
-	void addIfNotExist(WordId id, WordValue v);
+	/// Scoring type
+	enum ScoringType
+	{
+		L1_NORM,
+		L2_NORM,
+		CHI_SQUARE,
+		KL,
+		BHATTACHARYYA,
+		DOT_PRODUCT,
+	};
 
-	/**
-	 * L1-Normalizes the values in the vector 
-	 * @param norm_type norm used
-	 */
-	void normalize(LNorm norm_type);
-	
-	/**
-	 * Prints the content of the bow vector
-	 * @param out stream
-	 * @param v
-	 */
-	friend std::ostream& operator<<(std::ostream &out, const BowVector &v);
-	
-	/**
-	 * Saves the bow vector as a vector in a matlab file
-	 * @param filename
-	 * @param W number of words in the vocabulary
-	 */
-	void saveM(const std::string &filename, size_t W) const;
-};
+	/// Vector of words to represent images
+	class BowVector : public std::map<WordId, WordValue>
+	{
+		friend class boost::serialization::access;
+		template <class Archive>
+		void serialize(Archive &ar, const int version)
+		{
+			ar &boost::serialization::base_object<std::map<WordId, WordValue>>(*this);
+		}
+
+	public:
+		/**
+		 * Constructor
+		 */
+		BowVector(void);
+
+		/**
+		 * Destructor
+		 */
+		~BowVector(void);
+
+		/**
+		 * Adds a value to a word value existing in the vector, or creates a new
+		 * word with the given value
+		 * @param id word id to look for
+		 * @param v value to create the word with, or to add to existing word
+		 */
+		void addWeight(WordId id, WordValue v);
+
+		/**
+		 * Adds a word with a value to the vector only if this does not exist yet
+		 * @param id word id to look for
+		 * @param v value to give to the word if this does not exist
+		 */
+		void addIfNotExist(WordId id, WordValue v);
+
+		/**
+		 * L1-Normalizes the values in the vector
+		 * @param norm_type norm used
+		 */
+		void normalize(LNorm norm_type);
+
+		/**
+		 * Prints the content of the bow vector
+		 * @param out stream
+		 * @param v
+		 */
+		friend std::ostream &operator<<(std::ostream &out, const BowVector &v);
+
+		/**
+		 * Saves the bow vector as a vector in a matlab file
+		 * @param filename
+		 * @param W number of words in the vocabulary
+		 */
+		void saveM(const std::string &filename, size_t W) const;
+	};
 
 } // namespace DBoW2
 
