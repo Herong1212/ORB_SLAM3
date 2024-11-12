@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(ORB_SLAM3)
 
+# 尊嘟假嘟？你能自动识别吗？
+
 # 设置编译选项 Release
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release) # 在这儿修改为 Debug 好像不太管用
