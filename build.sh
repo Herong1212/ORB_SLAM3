@@ -30,11 +30,12 @@ make -j
 cd ../../../
 
 # 解压字典文件，解压一次然后注释掉即可！
-echo "Uncompress vocabulary ..."
+echo
+echo "-------------------------------- 4、Uncompress vocabulary ... -----------------------------------------"
 
-cd Vocabulary
-tar -xf ORBvoc.txt.tar.gz
-cd ..
+# cd Vocabulary
+# tar -xf ORBvoc.txt.tar.gz
+# cd ..
 
 echo
 echo "----------------- Boss: Configuring and building ORB_SLAM3 ... -----------------------------------------"
