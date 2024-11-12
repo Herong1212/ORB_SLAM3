@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(ORB_SLAM3)
 
-# 尊嘟假嘟？你能自动识别吗？能不能行
+# 尊嘟假嘟？你能自动识别吗？能不能行111
 
 # 设置编译选项 Release
 if(NOT CMAKE_BUILD_TYPE)
