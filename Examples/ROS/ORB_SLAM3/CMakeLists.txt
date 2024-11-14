@@ -5,13 +5,13 @@ project(orb_slam3_ros)
 # rosbuild 已被废弃：在新版本的 ROS（如 ROS Noetic、ROS 2）中，推荐使用 catkin 或 ament 而非 rosbuild。也就是在本机上不需要该行代码！
 # include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 
-# $ENV{ROS_ROOT} 表示访问环境变量 ROS_ROOT，该变量通常指向 ROS 的安装目录，比如 /opt/ros/<distro>。
 # message("ROS_ROOT: " ${ROS_ROOT})
+# $ENV{ROS_ROOT} 表示访问环境变量 ROS_ROOT，该变量通常指向 ROS 的安装目录，比如 /opt/ros/<distro>。
 
+# rosbuild_init()
 # rosbuild_init() 会初始化 rosbuild 的一些默认设置，加载与构建、依赖关系和文件路径相关的配置。
 # 它会在 CMakeLists.txt 文件中设置编译选项、包含路径和链接库等，以便后续可以使用 rosbuild 提供的构建功能。
 # 在 ROS Noetic 中，因为 rosbuild 已不再推荐使用，建议用 catkin 来代替 rosbuild_init() 的功能。
-# rosbuild_init()
 
 message("")
 message("----------------------初始化完成！-----------------------------------" \n)
@@ -23,7 +23,6 @@ message("ROS_BUILD_TYPE: " ${ROS_BUILD_TYPE})
 message("")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native")
-
 message("CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 message("")
 
