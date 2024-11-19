@@ -21,11 +21,10 @@
 
 #include <mutex>
 
-namespace ORB_SLAM3
 {
 
-    Viewer::Viewer(System *pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Tracking *pTracking, const string &strSettingPath, Settings *settings) : both(false), mpSystem(pSystem), mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpTracker(pTracking),
-                                                                                                                                                               mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
+    Viewer::Viewer(System * pSystem, FrameDrawer * pFrameDrawer, MapDrawer * pMapDrawer, Tracking * pTracking, const string &strSettingPath, Settings *settings) : both(false), mpSystem(pSystem), mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpTracker(pTracking),
+                                                                                                                                                                   mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
     {
         if (settings)
         {
@@ -54,7 +53,7 @@ namespace ORB_SLAM3
         mbStopTrack = false;
     }
 
-    void Viewer::newParameterLoader(Settings *settings)
+    void Viewer::newParameterLoader(Settings * settings)
     {
         mImageViewerScale = 1.f;
 
@@ -74,7 +73,7 @@ namespace ORB_SLAM3
         mViewpointF = settings->viewPointF();
     }
 
-    bool Viewer::ParseViewerParamFile(cv::FileStorage &fSettings)
+    bool Viewer::ParseViewerParamFile(cv::FileStorage & fSettings)
     {
         bool b_miss_params = false;
         mImageViewerScale = 1.f;
@@ -335,6 +334,25 @@ namespace ORB_SLAM3
                 cv::resize(toShow, toShow, cv::Size(width, height));
             }
 
+            // todo---Yolo
+            {
+                std::unique_lock<std::mutex> lock(mMutexPAFinsh);
+                for (auto vit = mmDetectMap.begin(); vit != mmDetectMap.end(); vit++)
+                {
+                    if (vit->second.size() != 0)
+                    {
+                        for (auto area : vit->second)
+                        {
+                            cv::rectangle(toShow, area, cv::Scalar(0, 0, 255), 1);
+                            cv::putText(toShow,
+                                        vit->first,
+                                        cv::Point(area.x, area.y),
+                                        cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
+                        }
+                    }
+                }
+            }
+
             cv::imshow("ORB-SLAM3: Current Frame", toShow);
             cv::waitKey(mT);
 
@@ -447,5 +465,4 @@ namespace ORB_SLAM3
     {
         mbStopTrack = true;
     }*/
-
 }

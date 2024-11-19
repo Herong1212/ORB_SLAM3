@@ -41,6 +41,10 @@
 #include <mutex>
 #include <unordered_set>
 
+// todo 引入 YOLO 检测器 和 点云 头文件
+#include "YoloDetect.h"
+#include "PointCloudMapper.h"
+
 namespace ORB_SLAM3
 {
 
@@ -77,6 +81,10 @@ namespace ORB_SLAM3
         void SetLocalMapper(LocalMapping *pLocalMapper);
         void SetLoopClosing(LoopClosing *pLoopClosing);
         void SetViewer(Viewer *pViewer);
+
+        // todo 设置动态物体检测器
+        void SetDetector(YoloDetection *pDetector);
+
         void SetStepByStep(bool bSet);
         bool GetStepByStep();
 
@@ -138,6 +146,13 @@ namespace ORB_SLAM3
         Frame mLastFrame;
 
         cv::Mat mImGray;
+
+        // new👇
+        cv::Mat mImColor;
+        cv::Mat mDepth;
+
+        // todo 点云
+        PointCloudMapper *mpPointCloudMapper;
 
         // Initialization Variables (Monocular)
         std::vector<int> mvIniLastMatches;
@@ -279,6 +294,9 @@ namespace ORB_SLAM3
         FrameDrawer *mpFrameDrawer;
         MapDrawer *mpMapDrawer;
         bool bStepByStep;
+
+        // todo YOLO 动态物体检测器指针
+        YoloDetection *mpDetector;
 
         // Atlas
         Atlas *mpAtlas;

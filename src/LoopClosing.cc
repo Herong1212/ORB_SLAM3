@@ -30,11 +30,13 @@
 namespace ORB_SLAM3
 {
 
+    // 构造函数
     LoopClosing::LoopClosing(Atlas *pAtlas, KeyFrameDatabase *pDB, ORBVocabulary *pVoc, const bool bFixScale, const bool bActiveLC) : mbResetRequested(false), mbResetActiveMapRequested(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas),
                                                                                                                                       mpKeyFrameDB(pDB), mpORBVocabulary(pVoc), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
                                                                                                                                       mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), mnFullBAIdx(0), mnLoopNumCoincidences(0), mnMergeNumCoincidences(0),
                                                                                                                                       mbLoopDetected(false), mbMergeDetected(false), mnLoopNumNotFound(0), mnMergeNumNotFound(0), mbActiveLC(bActiveLC)
     {
+        // 连续性阈值（表示“连续组”的一致性阈值），阈值越高，检测的鲁棒性越强。
         mnCovisibilityConsistencyTh = 3;
         mpLastCurrentKF = static_cast<KeyFrame *>(NULL);
 
@@ -73,28 +75,35 @@ namespace ORB_SLAM3
         mnCorrectionGBA = 0;
     }
 
+    // 设置追踪线程句柄
     void LoopClosing::SetTracker(Tracking *pTracker)
     {
         mpTracker = pTracker;
     }
-
+    // 设置局部建图线程句柄
     void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
     {
         mpLocalMapper = pLocalMapper;
     }
 
+    // note：回环线程主函数：实现主循环，持续检测闭环，并在检测到闭环时执行优化。
     void LoopClosing::Run()
     {
+        // 表示闭环检测线程正在运行
+        // 当线程结束时，会将 mbFinished 设置为 true。
         mbFinished = false;
 
         while (1)
         {
 
-            // NEW LOOP AND MERGE DETECTION ALGORITHM
-            //----------------------------
+            // ! NEW LOOP AND MERGE DETECTION ALGORITHM ----------------------------
 
+            // Step 1 查看闭环检测队列 mlpLoopKeyFrameQueue 中有没有关键帧进来
+            // Loopclosing 中的关键帧是 LocalMapping 发送过来的，LocalMapping 是 Tracking 中发过来的
+            // 在 LocalMapping 中通过 InsertKeyFrame 将关键帧插入闭环检测队列 mlpLoopKeyFrameQueue
             if (CheckNewKeyFrames())
             {
+                // 这部分后续未使用
                 if (mpLastCurrentKF)
                 {
                     mpLastCurrentKF->mvpLoopCandKFs.clear();
@@ -104,16 +113,21 @@ namespace ORB_SLAM3
                 std::chrono::steady_clock::time_point time_StartPR = std::chrono::steady_clock::now();
 #endif
 
+                // Step 2 检测有没有共同区域
                 bool bFindedRegion = NewDetectCommonRegions();
 
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndPR = std::chrono::steady_clock::now();
 
                 double timePRTotal = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(time_EndPR - time_StartPR).count();
+                std::cout << "TimePRTotal time: " << timePRTotal.count() << " ms" << std::endl;
                 vdPRTotal_ms.push_back(timePRTotal);
 #endif
+
+                // if(NewDetectCommonRegions()) 也可以这样用
                 if (bFindedRegion)
                 {
+                    // case 1：如果检测到共同区域发生在【当前帧】和【非活跃地图】中，则执行【地图融合】操作
                     if (mbMergeDetected)
                     {
                         if ((mpTracker->mSensor == System::IMU_MONOCULAR || mpTracker->mSensor == System::IMU_STEREO || mpTracker->mSensor == System::IMU_RGBD) &&
@@ -213,6 +227,7 @@ namespace ORB_SLAM3
                         }
                     }
 
+                    // case 2：如果检测到共同区域发生在【当前帧】和【活跃地图】中, 则执行【闭环】操作
                     if (mbLoopDetected)
                     {
                         bool bGoodLoop = true;
@@ -288,35 +303,47 @@ namespace ORB_SLAM3
                 mpLastCurrentKF = mpCurrentKF;
             }
 
+            // 查看是否有外部线程请求复位当前线程
             ResetIfRequested();
 
+            // 查看外部线程是否有终止当前线程的请求，如果有的话就跳出这个线程的主函数的主循环
             if (CheckFinish())
-            {
                 break;
-            }
 
-            usleep(5000);
+            // usleep(5000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
 
+        // 运行到这里说明有外部线程请求终止当前线程，在这个函数中执行终止当前线程的一些操作
         SetFinish();
     }
 
+    // 将某个关键帧加入到回环检测的过程中，由局部建图线程调用
     void LoopClosing::InsertKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexLoopQueue);
+
+        // ! 这里第0个关键帧不能够参与到回环检测的过程中，因为第0关键帧定义了整个地图的世界坐标系
         if (pKF->mnId != 0)
             mlpLoopKeyFrameQueue.push_back(pKF);
     }
 
+    // 查看列表中是否有等待被插入的关键帧
     bool LoopClosing::CheckNewKeyFrames()
     {
         unique_lock<mutex> lock(mMutexLoopQueue);
         return (!mlpLoopKeyFrameQueue.empty());
     }
 
+    // TODO 闭环线程的第 1 阶段 ——> 检测有没有共同区域 --- 对应于 ORB-SLAM2 里的函数 DetectLoop()
+    /**
+     * @brief 检测有没有共同区域，包括检测回环和融合匹配, sim3 计算, 验证
+     * @return true
+     * @return false
+     */
     bool LoopClosing::NewDetectCommonRegions()
     {
-        // To deactivate placerecognition. No loopclosing nor merging will be performed
+        // 如果一开始就不做回环的话这里就退出了，这个线程也就名存实亡了
         if (!mbActiveLC)
             return false;
 
@@ -364,6 +391,7 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartEstSim3_1 = std::chrono::steady_clock::now();
 #endif
+
         if (mnLoopNumCoincidences > 0)
         {
             bCheckSpatial = true;
@@ -374,6 +402,7 @@ namespace ORB_SLAM3
             int numProjMatches = 0;
             vector<MapPoint *> vpMatchedMPs;
             bool bCommonRegion = DetectAndReffineSim3FromLastKF(mpCurrentKF, mpLoopMatchedKF, gScw, numProjMatches, mvpLoopMPs, vpMatchedMPs);
+
             if (bCommonRegion)
             {
 
@@ -451,6 +480,7 @@ namespace ORB_SLAM3
                 }
             }
         }
+
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndEstSim3_1 = std::chrono::steady_clock::now();
 
@@ -459,9 +489,11 @@ namespace ORB_SLAM3
 
         if (mbMergeDetected || mbLoopDetected)
         {
+
 #ifdef REGISTER_TIMES
             vdEstSim3_ms.push_back(timeEstSim3);
 #endif
+
             mpKeyFrameDB->add(mpCurrentKF);
             return true;
         }
@@ -474,10 +506,13 @@ namespace ORB_SLAM3
         if (!bMergeDetectedInKF || !bLoopDetectedInKF)
         {
             // Search in BoW
+
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_StartQuery = std::chrono::steady_clock::now();
 #endif
+
             mpKeyFrameDB->DetectNBestCandidates(mpCurrentKF, vpLoopBowCand, vpMergeBowCand, 3);
+
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndQuery = std::chrono::steady_clock::now();
 
@@ -492,14 +527,11 @@ namespace ORB_SLAM3
         // Check the BoW candidates if the geometric candidate list is empty
         // Loop candidates
         if (!bLoopDetectedInKF && !vpLoopBowCand.empty())
-        {
             mbLoopDetected = DetectCommonRegionsFromBoW(vpLoopBowCand, mpLoopMatchedKF, mpLoopLastCurrentKF, mg2oLoopSlw, mnLoopNumCoincidences, mvpLoopMPs, mvpLoopMatchedMPs);
-        }
+
         // Merge candidates
         if (!bMergeDetectedInKF && !vpMergeBowCand.empty())
-        {
             mbMergeDetected = DetectCommonRegionsFromBoW(vpMergeBowCand, mpMergeMatchedKF, mpMergeLastCurrentKF, mg2oMergeSlw, mnMergeNumCoincidences, mvpMergeMPs, mvpMergeMatchedMPs);
-        }
 
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndEstSim3_2 = std::chrono::steady_clock::now();
@@ -511,9 +543,7 @@ namespace ORB_SLAM3
         mpKeyFrameDB->add(mpCurrentKF);
 
         if (mbMergeDetected || mbLoopDetected)
-        {
             return true;
-        }
 
         mpCurrentKF->SetErase();
         mpCurrentKF->mbCurrentPlaceRecognition = false;
@@ -953,6 +983,7 @@ namespace ORB_SLAM3
         return num_matches;
     }
 
+    // TODO 闭环线程的第 2 阶段 ——> 闭环矫正
     void LoopClosing::CorrectLoop()
     {
         // cout << "Loop detected!" << endl;
@@ -2082,6 +2113,7 @@ namespace ORB_SLAM3
 
     void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap, vector<MapPoint *> &vpMapPoints)
     {
+        // 定义 ORB 匹配器
         ORBmatcher matcher(0.8);
 
         int total_replaces = 0;
@@ -2160,6 +2192,7 @@ namespace ORB_SLAM3
         // cout << "FUSE-POSE: " << total_replaces << " MPs had been fused" << endl;
     }
 
+    // 由外部线程调用，请求复位当前线程
     void LoopClosing::RequestReset()
     {
         {
@@ -2197,6 +2230,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 当前线程调用，检查是否有外部线程请求复位当前线程，如果有的话就复位回环检测线程
     void LoopClosing::ResetIfRequested()
     {
         unique_lock<mutex> lock(mMutexReset);
@@ -2227,6 +2261,12 @@ namespace ORB_SLAM3
         }
     }
 
+    // todo 作用：完成闭环矫正后的最后一步 —— 对所有地图点和关键帧位姿进行全局 BA 优化👇
+    /**
+     * @brief 全局 BA 优化线程，并更新所有关键帧位姿和地图点坐标，这个是这个线程的主函数
+     *
+     * @param[in] nLoopKF 看上去是闭环关键帧 id, 但是在调用的时候给的其实是【当前关键帧】的 id
+     */
     void LoopClosing::RunGlobalBundleAdjustment(Map *pActiveMap, unsigned long nLoopKF)
     {
         Verbose::PrintMess("Starting Global Bundle Adjustment", Verbose::VERBOSITY_NORMAL);
@@ -2469,25 +2509,30 @@ namespace ORB_SLAM3
         }
     }
 
+    // 由外部线程调用，请求终止当前线程
     void LoopClosing::RequestFinish()
     {
         unique_lock<mutex> lock(mMutexFinish);
+
         // cout << "LC: Finish requested" << endl;
         mbFinishRequested = true;
     }
 
+    // 当前线程调用，查看是否有外部线程请求当前线程
     bool LoopClosing::CheckFinish()
     {
         unique_lock<mutex> lock(mMutexFinish);
         return mbFinishRequested;
     }
 
+    // 有当前线程调用，执行完成该函数之后线程主函数退出，线程销毁
     void LoopClosing::SetFinish()
     {
         unique_lock<mutex> lock(mMutexFinish);
         mbFinished = true;
     }
 
+    // 由外部线程调用,判断当前回环检测线程是否已经正确终止了
     bool LoopClosing::isFinished()
     {
         unique_lock<mutex> lock(mMutexFinish);

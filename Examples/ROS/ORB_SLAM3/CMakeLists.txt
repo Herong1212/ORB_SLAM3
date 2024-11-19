@@ -26,15 +26,22 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native")
 message("CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 message("")
 
-# Check C++11 or C++0x support
+# CMake 会自动检测编译器是否支持 C++11 或者 C++0x（这是 C++11 的一个早期版本标志，有些旧编译器使用它来表示 C++11）
 include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 
-if(COMPILER_SUPPORTS_CXX11)
+if(COMPILER_SUPPORTS_CXX17)
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+    add_definitions(-DCOMPILEDWITHC17)
+    message(STATUS "Using flag -std=c++17.")
+elseif(COMPILER_SUPPORTS_CXX11)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
     add_definitions(-DCOMPILEDWITHC11)
     message(STATUS "Using flag -std=c++11.")
+    message("")
 elseif(COMPILER_SUPPORTS_CXX0X)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
     add_definitions(-DCOMPILEDWITHC0X)
@@ -73,6 +80,11 @@ find_package(Pangolin REQUIRED)
 message("Pangolin version: ${Pangolin_VERSION}")
 message("")
 
+set(CMAKE_PREFIX_PATH "/usr/local/lib/libtorch")
+find_package(Torch REQUIRED)
+
+find_package(PCL REQUIRED)
+
 message("PROJECT_SOURCE_DIR: " ${PROJECT_SOURCE_DIR}) # /home/dsg/orbslam3_ghr/src/ORB_SLAM3/Examples/ROS/ORB_SLAM3
 include_directories(
     ${PROJECT_SOURCE_DIR}
@@ -82,6 +94,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/../../../Thirdparty/Sophus
     ${Pangolin_INCLUDE_DIRS}
     ${catkin_INCLUDE_DIRS}
+    ${TORCH_INCLUDE_DIRS}
+    ${PCL_INCLUDE_DIRS}
+    
 )
 message("标记第一处地点！")
 message("")
@@ -95,6 +110,8 @@ set(LIBS
     ${PROJECT_SOURCE_DIR}/../../../lib/libORB_SLAM3.so
     -lboost_system
     ${catkin_LIBRARIES}
+    ${PCL_LIBRARIES}
+    ${TORCH_LIBRARIES}
 )
 message("标记第二处地点！")
 message("")

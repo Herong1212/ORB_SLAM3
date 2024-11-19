@@ -38,6 +38,10 @@
 #include "ImuTypes.h"
 #include "Settings.h"
 
+// todo👇
+#include "YoloDetect.h"
+#include "PointCloudMapper.h"
+
 namespace ORB_SLAM3
 {
 
@@ -226,12 +230,16 @@ namespace ORB_SLAM3
 
         FrameDrawer *mpFrameDrawer;
         MapDrawer *mpMapDrawer;
+        // todo 点云定义
+        PointCloudMapper *mpPointCloudMapper;
 
         // System threads: Local Mapping, Loop Closing, Viewer.
         // The Tracking thread "lives" in the main execution thread that creates the System object.
         std::thread *mptLocalMapping;
         std::thread *mptLoopClosing;
         std::thread *mptViewer;
+        // todo 点云线程
+        std::thread *mptPointCloudMapping;
 
         // Reset flag
         std::mutex mMutexReset;
@@ -259,6 +267,9 @@ namespace ORB_SLAM3
         string mStrVocabularyFilePath;
 
         Settings *settings_;
+
+        // todo Yolo检测器
+        YoloDetection *mpDetector;
     };
 
 } // namespace ORB_SLAM

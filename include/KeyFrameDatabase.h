@@ -83,7 +83,15 @@ namespace ORB_SLAM3
         // Associated vocabulary
         const ORBVocabulary *mpVoc;
 
-        // Inverted file
+        // 倒排索引，mvInvertedFile[i] 表示包含了第 i 个 word id 的所有关键帧列表
+        // 如：mvInvertedFile = [
+        //     [],             // 单词 0 没有对应的关键帧
+        //     [KF_1],         // 单词 1 包含 KF_1
+        //     [KF_2],         // 单词 2 包含 KF_2
+        //     [ KF_1, KF_2 ], // 单词 3 包含 KF_1 和 KF_2
+        //     [],             // 单词 4 没有对应的关键帧
+        //     [ KF_1, KF_2 ]  // 单词 5 包含 KF_1 和 KF_2
+        //      ];
         std::vector<list<KeyFrame *>> mvInvertedFile;
 
         // For save relation without pointer, this is necessary for save/load function

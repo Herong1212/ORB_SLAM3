@@ -92,6 +92,9 @@ namespace ORB_SLAM3
 
         std::vector<cv::Mat> mvImagePyramid;
 
+        // todo -- yolo
+        std::vector<cv::Rect2i> mvDynamicArea;
+
     protected:
         void ComputePyramid(cv::Mat image);
         void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint>> &allKeypoints);

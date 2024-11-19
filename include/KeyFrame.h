@@ -382,6 +382,8 @@ namespace ORB_SLAM3
         const cv::Mat mDescriptors;
 
         // BoW
+        //  mBowVec 内部实际存储的是 std::map<WordId, WordValue>
+        //  WordId 和 WordValue 表示单词在叶子中的 id 和权重
         DBoW2::BowVector mBowVec;
         DBoW2::FeatureVector mFeatVec;
 
@@ -417,6 +419,9 @@ namespace ORB_SLAM3
 
         std::vector<KeyFrame *> mvpLoopCandKFs;
         std::vector<KeyFrame *> mvpMergeCandKFs;
+
+        // todo 动态区域
+        std::vector<cv::Rect2i> mvDynamicArea;
 
         // bool mbHasHessian;
         // cv::Mat mHessianPose;

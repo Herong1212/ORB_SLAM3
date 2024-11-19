@@ -29,7 +29,14 @@
 
 namespace ORB_SLAM3
 {
-
+    /**
+     * @brief Sim 3 Solver 构造函数
+     * @param[in] pKF1              当前关键帧
+     * @param[in] pKF2              候选的闭环关键帧
+     * @param[in] vpMatched12       通过词袋模型加速匹配所得到的,两帧特征点的匹配关系所得到的地图点,本质上是来自于候选闭环关键帧的地图点
+     * @param[in] bFixScale         当前传感器类型的输入需不需要计算尺度。单目的时候需要，双目和RGBD的时候就不需要了
+     * @param[in] vpKeyFrameMatchedMP   我也不知道这是啥
+     */
     Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> &vpMatched12, const bool bFixScale,
                            vector<KeyFrame *> vpKeyFrameMatchedMP) : mnIterations(0), mnBestInliers(0), mbFixScale(bFixScale),
                                                                      pCamera1(pKF1->mpCamera), pCamera2(pKF2->mpCamera)
@@ -117,6 +124,13 @@ namespace ORB_SLAM3
         SetRansacParameters();
     }
 
+    /**
+     * @brief 设置进行 RANSAC 时的参数
+     *
+     * @param[in] probability           当前这些匹配点的置信度，也就是一次采样恰好都是内点的概率
+     * @param[in] minInliers            完成RANSAC所需要的最少内点个数
+     * @param[in] maxIterations         设定的最大迭代次数
+     */
     void Sim3Solver::SetRansacParameters(double probability, int minInliers, int maxIterations)
     {
         mRansacProb = probability;
@@ -290,20 +304,34 @@ namespace ORB_SLAM3
         return bestSim3;
     }
 
+    // 在"进行迭代计算"函数 iterate 的基础上套了一层壳，使用默认参数。不过目前好像没有被使用到
     Eigen::Matrix4f Sim3Solver::find(vector<bool> &vbInliers12, int &nInliers)
     {
         bool bFlag;
         return iterate(mRansacMaxIts, bFlag, vbInliers12, nInliers);
     }
 
+    /**
+     * @brief 给出三个点，计算它们的质心以及去质心之后的坐标
+     *
+     * @param[in] P     输入的3D点
+     * @param[in] Pr    去质心后的点
+     * @param[in] C     质心
+     */
     void Sim3Solver::ComputeCentroid(Eigen::Matrix3f &P, Eigen::Matrix3f &Pr, Eigen::Vector3f &C)
     {
         C = P.rowwise().sum();
-        C = C / P.cols();
+        C = C / P.cols(); // 求平均
         for (int i = 0; i < P.cols(); i++)
             Pr.col(i) = P.col(i) - C;
     }
 
+    // note：计算 Sim3
+    /**
+     * @brief 根据两组匹配的3D点，计算P2到P1的Sim3变换
+     * @param[in] P1    匹配的3D点(三个,每个的坐标都是列向量形式,三个点组成了3x3的矩阵)(当前关键帧)
+     * @param[in] P2    匹配的3D点(闭环关键帧)
+     */
     void Sim3Solver::ComputeSim3(Eigen::Matrix3f &P1, Eigen::Matrix3f &P2)
     {
         // Custom implementation of:
@@ -406,6 +434,7 @@ namespace ORB_SLAM3
         mT21i.block<3, 1>(0, 3) = tinv;
     }
 
+    // 通过计算的 Sim3 投影，和自身投影的误差比较，进行内点检测
     void Sim3Solver::CheckInliers()
     {
         vector<Eigen::Vector2f> vP1im2, vP2im1;
@@ -437,21 +466,32 @@ namespace ORB_SLAM3
         return mBestT12;
     }
 
+    // ps1：得到计算的旋转矩阵
     Eigen::Matrix3f Sim3Solver::GetEstimatedRotation()
     {
         return mBestRotation;
     }
 
+    // ps2：得到计算的平移向量
     Eigen::Vector3f Sim3Solver::GetEstimatedTranslation()
     {
         return mBestTranslation;
     }
 
+    // ps3：得到估计的从候选帧到当前帧的变换尺度
     float Sim3Solver::GetEstimatedScale()
     {
         return mBestScale;
     }
 
+    /**
+     * @brief 按照给定的 Sim3 变换进行投影操作，得到三维点的2D投影点
+     *
+     * @param[in] vP3Dw         3D点
+     * @param[in & out] vP2D    投影到图像的2D点
+     * @param[in] Tcw           Sim3变换
+     * @param[in] pCamera       啥玩意儿？
+     */
     void Sim3Solver::Project(const vector<Eigen::Vector3f> &vP3Dw, vector<Eigen::Vector2f> &vP2D, Eigen::Matrix4f Tcw, GeometricCamera *pCamera)
     {
         Eigen::Matrix3f Rcw = Tcw.block<3, 3>(0, 0);
@@ -460,14 +500,24 @@ namespace ORB_SLAM3
         vP2D.clear();
         vP2D.reserve(vP3Dw.size());
 
+        // 对每个3D地图点进行投影操作
         for (size_t i = 0, iend = vP3Dw.size(); i < iend; i++)
         {
+            // 首先将当前关键帧的地图点坐标转换到这个关键帧的相机坐标系下
             Eigen::Vector3f P3Dc = Rcw * vP3Dw[i] + tcw;
             Eigen::Vector2f pt2D = pCamera->project(P3Dc);
+
             vP2D.push_back(pt2D);
         }
     }
 
+    /**
+     * @brief 计算当前关键帧中的地图点在当前关键帧图像上的投影坐标
+     *
+     * @param[in] vP3Dc         相机坐标系下三维点坐标
+     * @param[in] vP2D          投影的二维图像坐标
+     * @param[in] pCamera       啥玩意儿？
+     */
     void Sim3Solver::FromCameraToImage(const vector<Eigen::Vector3f> &vP3Dc, vector<Eigen::Vector2f> &vP2D, GeometricCamera *pCamera)
     {
         vP2D.clear();
@@ -476,6 +526,8 @@ namespace ORB_SLAM3
         for (size_t i = 0, iend = vP3Dc.size(); i < iend; i++)
         {
             Eigen::Vector2f pt2D = pCamera->project(vP3Dc[i]);
+
+            // 图像上的 u,v 坐标
             vP2D.push_back(pt2D);
         }
     }

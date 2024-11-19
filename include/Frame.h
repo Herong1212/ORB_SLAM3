@@ -167,6 +167,9 @@ namespace ORB_SLAM3
         {
             return mbHasVelocity;
         }
+        
+        // todo--Yolo
+        vector<cv::Rect2i> mvDynamicArea;
 
     private:
         // Sophus/Eigen migration

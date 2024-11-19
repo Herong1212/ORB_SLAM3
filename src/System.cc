@@ -31,6 +31,9 @@
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
 
+// todo
+#include "YoloDetect.h"
+
 namespace ORB_SLAM3
 {
 
@@ -183,6 +186,9 @@ namespace ORB_SLAM3
         if (mSensor == IMU_STEREO || mSensor == IMU_MONOCULAR || mSensor == IMU_RGBD)
             mpAtlas->SetInertialSensor();
 
+        // todo：Yolo
+        mpDetector = new YoloDetection();
+
         // Create Drawers. These are used by the Viewer
         mpFrameDrawer = new FrameDrawer(mpAtlas);
         mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
@@ -192,6 +198,15 @@ namespace ORB_SLAM3
         cout << "Seq. Name: " << strSequence << endl;
         mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
                                  mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+
+        // todo Yolo 句柄
+        mpTracker->SetDetector(mpDetector);
+
+        // todo 点云
+        mpPointCloudMapper = new PointCloudMapper();
+        mpTracker->mpPointCloudMapper = mpPointCloudMapper;
+        //  todo 创建点云线程
+        mptPointCloudMapping = new thread(&PointCloudMapper::run, mpTracker->mpPointCloudMapper);
 
         // Initialize the Local Mapping thread and launch
         mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor == MONOCULAR || mSensor == IMU_MONOCULAR,

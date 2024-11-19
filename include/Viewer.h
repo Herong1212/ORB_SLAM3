@@ -64,6 +64,11 @@ namespace ORB_SLAM3
 
         bool both;
 
+        // todo--Yolo
+        std::vector<cv::Rect2i> mvPersonArea;
+        map<string, vector<cv::Rect2i>> mmDetectMap;
+        std::mutex mMutexPAFinsh;
+
     private:
         bool ParseViewerParamFile(cv::FileStorage &fSettings);
 

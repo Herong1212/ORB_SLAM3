@@ -35,9 +35,37 @@
 
 using namespace std;
 
+// 程序中变量名的第一个字母如果为"m"则表示为类中的成员变量，member
+// 第一个、第二个字母:
+// "p"表示指针数据类型
+// "n"表示int类型
+// "b"表示bool类型
+// "s"表示set类型
+// "v"表示vector数据类型
+// 'l'表示list数据类型
+// "KF"表示 KeyFrame 数据类型
+
 namespace ORB_SLAM3
 {
+    // notice 测试用的嗷！
+    // void Tracking::TestA()
+    // {
+    //     std::cout << "This is a test! 阿哈哈哈哈哈哈哈哈哈哈！" << std::endl;
+    // }
 
+    /**
+     * @brief 跟踪线程构造函数
+     * @param pSys 系统类指针
+     * @param pVoc 词典
+     * @param pFrameDrawer 画图像的
+     * @param pMapDrawer 画地图的
+     * @param pAtlas atlas
+     * @param pKFDB 关键帧词典数据库
+     * @param strSettingPath 参数文件路径
+     * @param sensor 传感器类型
+     * @param settings 参数类
+     * @param _strSeqName 序列名字，没用到
+     */
     Tracking::Tracking(System *pSys, ORBVocabulary *pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Atlas *pAtlas, KeyFrameDatabase *pKFDB, const string &strSettingPath, const int sensor, Settings *settings, const string &_nameSeq) : mState(NO_IMAGES_YET), mSensor(sensor), mTrackedFr(0), mbStep(false),
                                                                                                                                                                                                                                                   mbOnlyTracking(false), mbMapUpdated(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB),
                                                                                                                                                                                                                                                   mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
@@ -556,6 +584,7 @@ namespace ORB_SLAM3
         // f_track_stats.close();
     }
 
+    // 根据参数类读取参数，可快速略过不看
     void Tracking::newParameterLoader(Settings *settings)
     {
         mpCamera = settings->camera1();
@@ -646,6 +675,7 @@ namespace ORB_SLAM3
         mpImuPreintegratedFromLastKF = new IMU::Preintegrated(IMU::Bias(), *mpImuCalib);
     }
 
+    // 根据文件读取相机参数，可快速略过不看
     bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
     {
         mDistCoef = cv::Mat::zeros(4, 1, CV_32F);
@@ -1241,6 +1271,7 @@ namespace ORB_SLAM3
         return true;
     }
 
+    // 根据文件读取特征点参数，可快速略过不看
     bool Tracking::ParseORBParamFile(cv::FileStorage &fSettings)
     {
         bool b_miss_params = false;
@@ -1326,6 +1357,7 @@ namespace ORB_SLAM3
         return true;
     }
 
+    // 根据文件读取 IMU 参数，可快速略过不看
     bool Tracking::ParseIMUParamFile(cv::FileStorage &fSettings)
     {
         bool b_miss_params = false;
@@ -1450,21 +1482,31 @@ namespace ORB_SLAM3
         return true;
     }
 
+    // notice：设置局部建图器
     void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
     {
         mpLocalMapper = pLocalMapper;
     }
 
+    // notice：设置回环器
     void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
     {
         mpLoopClosing = pLoopClosing;
     }
 
+    // notice：设置显示器
     void Tracking::SetViewer(Viewer *pViewer)
     {
         mpViewer = pViewer;
     }
 
+    // todo 设置动态物体检测器
+    void Tracking::SetDetector(YoloDetection *pDetector)
+    {
+        mpDetector = pDetector;
+    }
+
+    // 一步一步进行
     void Tracking::SetStepByStep(bool bSet)
     {
         bStepByStep = bSet;
@@ -1475,6 +1517,17 @@ namespace ORB_SLAM3
         return bStepByStep;
     }
 
+    // notice1：获取双目相机图像
+    /**
+     * @brief 输入左右目图像，可以为RGB、BGR、RGBA、GRAY
+     * 1、将图像转为mImGray和imGrayRight并初始化mCurrentFrame
+     * 2、进行tracking过程
+     * 输出世界坐标系到该帧相机坐标系的变换矩阵
+     * @param imRectLeft 左图
+     * @param imRectRight 右图
+     * @param timestamp 时间戳
+     * @param filename 文件名字，貌似调试用的
+     */
     Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp, string filename)
     {
         // cout << "GrabImageStereo" << endl;
@@ -1540,10 +1593,33 @@ namespace ORB_SLAM3
         return mCurrentFrame.GetPose();
     }
 
+    // notice2：获取 RGBD 图像
+    /**
+     * @brief 输入左目RGB或RGBA图像和深度图
+     * 1、将图像转为mImGray和imDepth并初始化mCurrentFrame
+     * 2、进行tracking过程
+     * 输出世界坐标系到该帧相机坐标系的变换矩阵
+     * @param imRGB 彩色图
+     * @param imD 深度图
+     * @param timestamp 时间戳
+     * @param filename 文件名字，貌似调试用的
+     */
     Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB, const cv::Mat &imD, const double &timestamp, string filename)
     {
         mImGray = imRGB;
+        mImColor = imRGB.clone(); // todo-Yolo
         cv::Mat imDepth = imD;
+
+        // todo--Yolo
+        cv::Mat InputImage;
+        InputImage = imRGB.clone();
+        mpDetector->GetImage(InputImage);
+        mpDetector->Detect();
+        mpORBextractorLeft->mvDynamicArea = mpDetector->mvDynamicArea;
+        {
+            std::unique_lock<std::mutex> lock(mpViewer->mMutexPAFinsh);
+            mpViewer->mmDetectMap = mpDetector->mmDetectMap;
+        }
 
         if (mImGray.channels() == 3)
         {
@@ -1563,10 +1639,17 @@ namespace ORB_SLAM3
         if ((fabs(mDepthMapFactor - 1.0f) > 1e-5) || imDepth.type() != CV_32F)
             imDepth.convertTo(imDepth, CV_32F, mDepthMapFactor);
 
+        mDepth = imDepth.clone();
         if (mSensor == System::RGBD)
             mCurrentFrame = Frame(mImGray, imDepth, timestamp, mpORBextractorLeft, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera);
         else if (mSensor == System::IMU_RGBD)
             mCurrentFrame = Frame(mImGray, imDepth, timestamp, mpORBextractorLeft, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, &mLastFrame, *mpImuCalib);
+
+        // todo--Yolo
+        mCurrentFrame.mvDynamicArea = mpDetector->mvDynamicArea;
+
+        mpDetector->mmDetectMap.clear();
+        mpDetector->mvDynamicArea.clear();
 
         mCurrentFrame.mNameFile = filename;
         mCurrentFrame.mnDataset = mnNumDataset;
@@ -1580,6 +1663,18 @@ namespace ORB_SLAM3
         return mCurrentFrame.GetPose();
     }
 
+    // notice3：获取单目图像
+    /**
+     * @brief 输入左目 RGB 或 RGBA 图像，输出世界坐标系到该帧相机坐标系的变换矩阵
+     *
+     * @param im 图像
+     * @param timestamp 时间戳
+     * @param filename 文件名字，貌似调试用的
+     *
+     * Step 1 ：将彩色图像转为灰度图像
+     * Step 2 ：构造Frame
+     * Step 3 ：跟踪
+     */
     Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename)
     {
         mImGray = im;
@@ -1631,12 +1726,18 @@ namespace ORB_SLAM3
         return mCurrentFrame.GetPose();
     }
 
+    // notice4：获取 IMU 数据
+    /**
+     * @brief 将imu数据存放在mlQueueImuData的list链表里
+     * @param[in] imuMeasurement
+     */
     void Tracking::GrabImuData(const IMU::Point &imuMeasurement)
     {
         unique_lock<mutex> lock(mMutexImuQueue);
         mlQueueImuData.push_back(imuMeasurement);
     }
 
+    // 预积分，对于一个帧有两种预积分，一种是相对于上一帧，一种是相对于上一个关键帧
     void Tracking::PreintegrateIMU()
     {
 
@@ -1755,6 +1856,15 @@ namespace ORB_SLAM3
         // Verbose::PrintMess("Preintegration is finished!! ", Verbose::VERBOSITY_DEBUG);
     }
 
+    /**
+     * @brief 跟踪不成功的时候，用初始化好的imu数据做跟踪处理，通过IMU预测状态
+     * 两个地方用到：
+     *      1. 匀速模型计算速度,但并没有给当前帧位姿赋值；
+     *      2. 跟踪丢失时不直接判定丢失，通过这个函数预测当前帧位姿看看能不能拽回来，代替纯视觉中的重定位
+     *
+     * @return true
+     * @return false
+     */
     bool Tracking::PredictStateIMU()
     {
         if (!mCurrentFrame.mpPrevFrame)
@@ -1810,6 +1920,15 @@ namespace ORB_SLAM3
         // TODO To implement...
     }
 
+    // NOTE：线程主函数，大 Boss， 非常重要的！！！
+    /**
+     * @brief 跟踪过程，包括恒速模型跟踪、参考关键帧跟踪、局部地图跟踪
+     * track 包含两部分：估计运动、跟踪局部地图
+     *
+     * Step 1：初始化
+     * Step 2：跟踪
+     * Step 3：记录位姿信息，用于轨迹复现
+     */
     void Tracking::Track()
     {
 
@@ -2341,6 +2460,11 @@ namespace ORB_SLAM3
 #endif
     }
 
+    /*
+     * @brief 双目和rgbd的地图初始化，比单目简单很多
+     *
+     * 由于具有深度信息，直接生成MapPoints
+     */
     void Tracking::StereoInitialization()
     {
         if (mCurrentFrame.N > 500)
@@ -2458,6 +2582,20 @@ namespace ORB_SLAM3
         }
     }
 
+    /*
+     * @brief 单目的地图初始化
+     *
+     * 并行地计算基础矩阵和单应性矩阵，选取其中一个模型，恢复出最开始两帧之间的相对姿态以及点云
+     * 得到初始两帧的匹配、相对运动、初始MapPoints
+     *
+     * Step 1：（未创建）得到用于初始化的第一帧，初始化需要两帧
+     * Step 2：（已创建）如果当前帧特征点数大于100，则得到用于单目初始化的第二帧
+     * Step 3：在mInitialFrame与mCurrentFrame中找匹配的特征点对
+     * Step 4：如果初始化的两帧之间的匹配点太少，重新初始化
+     * Step 5：通过H模型或F模型进行单目初始化，得到两帧间相对运动、初始MapPoints
+     * Step 6：删除那些无法进行三角化的匹配点
+     * Step 7：将三角化得到的3D点包装成MapPoints
+     */
     void Tracking::MonocularInitialization()
     {
 
@@ -2533,6 +2671,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 单目相机成功初始化后用三角化得到的点生成MapPoints
     void Tracking::CreateInitialMapMonocular()
     {
         // Create KeyFrames
@@ -2665,6 +2804,14 @@ namespace ORB_SLAM3
         initID = pKFcur->mnId;
     }
 
+    // notice：在 Atlas 中保存当前地图，创建新地图，所有跟状态相关的变量全部重置
+    /**
+     * @brief 在 Atlas 中保存当前地图，创建新地图，所有跟状态相关的变量全部重置
+     * 1. 前后两帧对应的时间戳反了
+     * 2. imu 模式下前后帧超过 1s
+     * 3. 上一帧为最近丢失且重定位失败时
+     * 4. 重定位成功，局部地图跟踪失败
+     */
     void Tracking::CreateMapInAtlas()
     {
         mnLastInitFrameId = mCurrentFrame.mnId;
@@ -2705,6 +2852,12 @@ namespace ORB_SLAM3
         mbCreatedMap = true;
     }
 
+    /*
+     * @brief 检查上一帧中的地图点是否需要被替换
+     *
+     * Local Mapping线程可能会将关键帧中某些地图点进行替换，由于tracking中需要用到上一帧地图点，所以这里检查并更新上一帧中被替换的地图点
+     * @see LocalMapping::SearchInNeighbors()
+     */
     void Tracking::CheckReplacedInLastFrame()
     {
         for (int i = 0; i < mLastFrame.N; i++)
@@ -2722,6 +2875,18 @@ namespace ORB_SLAM3
         }
     }
 
+    // TODO 作用：跟踪线程的第 1 阶段跟踪 ——> 参考关键帧跟踪👇
+    /*
+     * @brief 用参考关键帧的地图点来对当前普通帧进行跟踪
+     *
+     * Step 1：将当前普通帧的描述子转化为BoW向量
+     * Step 2：通过词袋BoW加速当前帧与参考帧之间的特征点匹配
+     * Step 3: 将上一帧的位姿态作为当前帧位姿的初始值
+     * Step 4: 通过优化3D-2D的重投影误差来获得位姿
+     * Step 5：剔除优化后的匹配点中的外点
+     * @return 如果匹配数超10，返回true
+     *
+     */
     bool Tracking::TrackReferenceKeyFrame()
     {
         // Compute Bag of Words vector
@@ -2784,6 +2949,11 @@ namespace ORB_SLAM3
             return nmatchesMap >= 10;
     }
 
+    /**
+     * @brief 更新上一帧位姿，在上一帧中生成临时地图点
+     * 单目情况：只计算了上一帧的世界坐标系位姿
+     * 双目和rgbd情况：选取有有深度值的并且没有被选为地图点的点生成新的临时地图点，提高跟踪鲁棒性
+     */
     void Tracking::UpdateLastFrame()
     {
         // Update pose according to reference keyframe
@@ -2858,6 +3028,15 @@ namespace ORB_SLAM3
         }
     }
 
+    // TODO 作用：跟踪线程的第 1 阶段跟踪 ——> 恒速模型跟踪👇
+    /**
+     * @brief 根据恒定速度模型用上一帧地图点来对当前帧进行跟踪
+     * Step 1：更新上一帧的位姿；对于双目或RGB-D相机，还会根据深度值生成临时地图点
+     * Step 2：根据上一帧特征点对应地图点进行投影匹配
+     * Step 3：优化当前帧位姿
+     * Step 4：剔除地图点中外点
+     * @return 如果匹配数大于10，认为跟踪成功，返回true
+     */
     bool Tracking::TrackWithMotionModel()
     {
         ORBmatcher matcher(0.9, true);
@@ -2951,6 +3130,22 @@ namespace ORB_SLAM3
             return nmatchesMap >= 10;
     }
 
+    // TODO 作用：跟踪线程的第 2 阶段跟踪 ——> 局部地图跟踪👇
+    /**
+     * @brief 用局部地图进行跟踪，进一步优化位姿
+     *
+     * 1. 更新局部地图，包括局部关键帧和关键点
+     * 2. 对局部 MapPoints 进行投影匹配
+     * 3. 根据匹配对估计当前帧的姿态
+     * 4. 根据姿态剔除误匹配
+     * @return true if success
+     *
+     * Step 1：更新局部关键帧mvpLocalKeyFrames和局部地图点mvpLocalMapPoints
+     * Step 2：在局部地图中查找与当前帧匹配的MapPoints, 其实也就是对局部地图点进行跟踪
+     * Step 3：更新局部所有MapPoints后对位姿再次优化
+     * Step 4：更新当前帧的MapPoints被观测程度，并统计跟踪局部地图的效果
+     * Step 5：决定是否跟踪成功
+     */
     bool Tracking::TrackLocalMap()
     {
 
@@ -3065,6 +3260,19 @@ namespace ORB_SLAM3
         }
     }
 
+    // todo 作用：判断当前帧是否需要插入关键帧👇
+    /**
+     * @brief 判断当前帧是否需要插入关键帧
+     *
+     * Step 1：纯VO模式下不插入关键帧，如果局部地图被闭环检测使用，则不插入关键帧
+     * Step 2：如果距离上一次重定位比较近，或者关键帧数目超出最大限制，不插入关键帧
+     * Step 3：得到参考关键帧跟踪到的地图点数量
+     * Step 4：查询局部地图管理器是否繁忙,也就是当前能否接受新的关键帧
+     * Step 5：对于双目或RGBD摄像头，统计可以添加的有效地图点总数 和 跟踪到的地图点数量
+     * Step 6：决策是否需要插入关键帧
+     * @return true         需要
+     * @return false        不需要
+     */
     bool Tracking::NeedNewKeyFrame()
     {
         if ((mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD) && !mpAtlas->GetCurrentMap()->isImuInitialized())
@@ -3218,6 +3426,15 @@ namespace ORB_SLAM3
             return false;
     }
 
+    // todo 作用：第二阶段跟踪结束后新建关键帧👇
+    /**
+     * @brief 创建新的关键帧
+     * 对于非单目的情况，同时创建新的MapPoints
+     *
+     * Step 1：将当前帧构造成关键帧
+     * Step 2：将当前关键帧设置为当前帧的参考关键帧
+     * Step 3：对于双目或rgbd摄像头，为当前帧生成新的MapPoints
+     */
     void Tracking::CreateNewKeyFrame()
     {
         if (mpLocalMapper->IsInitializing() && !mpAtlas->isImuInitialized())
@@ -3339,6 +3556,11 @@ namespace ORB_SLAM3
             }
         }
 
+        // todo--点云
+        pKF->mvDynamicArea = mCurrentFrame.mvDynamicArea;
+        mpLocalMapper->InsertKeyFrame(pKF);
+        mpPointCloudMapper->InsertKeyFrame(pKF, this->mImColor, this->mDepth);
+
         mpLocalMapper->InsertKeyFrame(pKF);
 
         mpLocalMapper->SetNotStop(false);
@@ -3347,6 +3569,10 @@ namespace ORB_SLAM3
         mpLastKeyFrame = pKF;
     }
 
+    /**
+     * @brief 用局部地图点进行投影匹配，得到更多的匹配关系
+     * 注意：局部地图点中已经是当前帧地图点的不需要再投影，只需要将此外的并且在视野范围内的点和当前帧进行投影匹配
+     */
     void Tracking::SearchLocalPoints()
     {
         // Do not search map points already matched
@@ -3421,6 +3647,13 @@ namespace ORB_SLAM3
         }
     }
 
+    /**
+     * @brief 更新LocalMap
+     *
+     * 局部地图包括：
+     * 1、K1个关键帧、K2个临近关键帧和参考关键帧
+     * 2、由这些关键帧观测到的MapPoints
+     */
     void Tracking::UpdateLocalMap()
     {
         // This is for visualization
@@ -3431,6 +3664,7 @@ namespace ORB_SLAM3
         UpdateLocalPoints();
     }
 
+    // 更新局部关键点。先把局部地图清空，然后将局部关键帧的有效地图点添加到局部地图中
     void Tracking::UpdateLocalPoints()
     {
         mvpLocalMapPoints.clear();
@@ -3460,6 +3694,16 @@ namespace ORB_SLAM3
         }
     }
 
+    /**
+     * @brief 跟踪局部地图函数里，更新局部关键帧
+     * 方法是遍历当前帧的地图点，将观测到这些地图点的关键帧和相邻的关键帧及其父子关键帧，作为mvpLocalKeyFrames
+     * Step 1：遍历当前帧的地图点，记录所有能观测到当前帧地图点的关键帧
+     * Step 2：更新局部关键帧（mvpLocalKeyFrames），添加局部关键帧包括以下3种类型
+     *      类型1：能观测到当前帧地图点的关键帧，也称一级共视关键帧
+     *      类型2：一级共视关键帧的共视关键帧，称为二级共视关键帧
+     *      类型3：一级共视关键帧的子关键帧、父关键帧
+     * Step 3：更新当前帧的参考关键帧，与自己共视程度最高的关键帧作为参考关键帧
+     */
     void Tracking::UpdateLocalKeyFrames()
     {
         // Each map point vote for the keyframes in which it has been observed
@@ -3611,6 +3855,19 @@ namespace ORB_SLAM3
         }
     }
 
+    // TODO 作用：跟踪线程的第 1 阶段跟踪 ——> 重定位跟踪👇
+    /**
+     * @details 重定位过程
+     * @return true
+     * @return false
+     *
+     * Step 1：计算当前帧特征点的词袋向量
+     * Step 2：找到与当前帧相似的候选关键帧
+     * Step 3：通过BoW进行匹配
+     * Step 4：通过EPnP算法估计姿态
+     * Step 5：通过PoseOptimization对姿态进行优化求解
+     * Step 6：如果内点较少，则通过投影的方式对之前未匹配的点进行匹配，再进行优化求解
+     */
     bool Tracking::Relocalization()
     {
         Verbose::PrintMess("Starting relocalization", Verbose::VERBOSITY_NORMAL);
@@ -3780,6 +4037,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 整个追踪线程执行复位操作
     void Tracking::Reset(bool bLocMap)
     {
         Verbose::PrintMess("System Reseting", Verbose::VERBOSITY_NORMAL);
@@ -3840,6 +4098,7 @@ namespace ORB_SLAM3
         Verbose::PrintMess("   End reseting! ", Verbose::VERBOSITY_NORMAL);
     }
 
+    // 重置当前活动地图，就是把这个地图的所有数据都清空，注意与新建地图的区别！
     void Tracking::ResetActiveMap(bool bLocMap)
     {
         Verbose::PrintMess("Active map Reseting", Verbose::VERBOSITY_NORMAL);
@@ -3930,11 +4189,13 @@ namespace ORB_SLAM3
         Verbose::PrintMess("   End reseting! ", Verbose::VERBOSITY_NORMAL);
     }
 
+    // 显示用的
     vector<MapPoint *> Tracking::GetLocalMapMPS()
     {
         return mvpLocalMapPoints;
     }
 
+    // 没用
     void Tracking::ChangeCalibration(const string &strSettingPath)
     {
         cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
@@ -3979,6 +4240,15 @@ namespace ORB_SLAM3
         mbOnlyTracking = flag;
     }
 
+    /**
+     * @brief 更新了关键帧的位姿，但需要修改普通帧的位姿，因为正常跟踪需要普通帧
+     * localmapping 中初始化 imu 中使用，速度的走向（仅在imu模式使用），最开始速度定义于imu初始化时，每个关键帧都根据位移除以时间得到，经过非线性优化保存于KF中.
+     * 之后使用本函数，让上一帧与当前帧分别与他们对应的上一关键帧做速度叠加得到，后面新的frame速度由上一个帧速度决定，如果使用匀速模型（大多数情况下），通过imu积分更新速度。
+     * 新的关键帧继承于对应帧
+     * @param  s 尺度
+     * @param  b 初始化后第一帧的偏置
+     * @param  pCurrentKeyFrame 当前关键帧
+     */
     void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame *pCurrentKeyFrame)
     {
         Map *pMap = pCurrentKeyFrame->GetMap();

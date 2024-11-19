@@ -283,6 +283,7 @@ namespace ORB_SLAM3
     void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexNewKFs);
+        
         mlNewKeyFrames.push_back(pKF);
         mbAbortBA = true;
     }
