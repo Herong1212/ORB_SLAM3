@@ -21,10 +21,11 @@
 
 #include <mutex>
 
+namespace ORB_SLAM3
 {
 
-    Viewer::Viewer(System * pSystem, FrameDrawer * pFrameDrawer, MapDrawer * pMapDrawer, Tracking * pTracking, const string &strSettingPath, Settings *settings) : both(false), mpSystem(pSystem), mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpTracker(pTracking),
-                                                                                                                                                                   mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
+    Viewer::Viewer(System *pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Tracking *pTracking, const string &strSettingPath, Settings *settings) : both(false), mpSystem(pSystem), mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpTracker(pTracking),
+                                                                                                                                                               mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
     {
         if (settings)
         {
@@ -53,7 +54,7 @@
         mbStopTrack = false;
     }
 
-    void Viewer::newParameterLoader(Settings * settings)
+    void Viewer::newParameterLoader(Settings *settings)
     {
         mImageViewerScale = 1.f;
 
@@ -73,7 +74,7 @@
         mViewpointF = settings->viewPointF();
     }
 
-    bool Viewer::ParseViewerParamFile(cv::FileStorage & fSettings)
+    bool Viewer::ParseViewerParamFile(cv::FileStorage &fSettings)
     {
         bool b_miss_params = false;
         mImageViewerScale = 1.f;
@@ -334,7 +335,7 @@
                 cv::resize(toShow, toShow, cv::Size(width, height));
             }
 
-            // todo---Yolo
+            // TODO---Yolo
             {
                 std::unique_lock<std::mutex> lock(mMutexPAFinsh);
                 for (auto vit = mmDetectMap.begin(); vit != mmDetectMap.end(); vit++)

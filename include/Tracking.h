@@ -147,7 +147,7 @@ namespace ORB_SLAM3
 
         cv::Mat mImGray;
 
-        // new👇
+        // todo 
         cv::Mat mImColor;
         cv::Mat mDepth;
 

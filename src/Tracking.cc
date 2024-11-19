@@ -1500,7 +1500,7 @@ namespace ORB_SLAM3
         mpViewer = pViewer;
     }
 
-    // todo 设置动态物体检测器
+    // TODO 设置动态物体检测器
     void Tracking::SetDetector(YoloDetection *pDetector)
     {
         mpDetector = pDetector;
@@ -1607,10 +1607,10 @@ namespace ORB_SLAM3
     Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB, const cv::Mat &imD, const double &timestamp, string filename)
     {
         mImGray = imRGB;
-        mImColor = imRGB.clone(); // todo-Yolo
+        mImColor = imRGB.clone(); // TODO-Yolo
         cv::Mat imDepth = imD;
 
-        // todo--Yolo
+        // TODO--Yolo
         cv::Mat InputImage;
         InputImage = imRGB.clone();
         mpDetector->GetImage(InputImage);
@@ -1645,7 +1645,7 @@ namespace ORB_SLAM3
         else if (mSensor == System::IMU_RGBD)
             mCurrentFrame = Frame(mImGray, imDepth, timestamp, mpORBextractorLeft, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth, mpCamera, &mLastFrame, *mpImuCalib);
 
-        // todo--Yolo
+        // TODO--Yolo
         mCurrentFrame.mvDynamicArea = mpDetector->mvDynamicArea;
 
         mpDetector->mmDetectMap.clear();
@@ -3260,7 +3260,7 @@ namespace ORB_SLAM3
         }
     }
 
-    // todo 作用：判断当前帧是否需要插入关键帧👇
+    // TODO 作用：判断当前帧是否需要插入关键帧👇
     /**
      * @brief 判断当前帧是否需要插入关键帧
      *
@@ -3426,7 +3426,7 @@ namespace ORB_SLAM3
             return false;
     }
 
-    // todo 作用：第二阶段跟踪结束后新建关键帧👇
+    // TODO 作用：第二阶段跟踪结束后新建关键帧👇
     /**
      * @brief 创建新的关键帧
      * 对于非单目的情况，同时创建新的MapPoints
@@ -3556,12 +3556,12 @@ namespace ORB_SLAM3
             }
         }
 
-        // todo--点云
+        // TODO--点云
         pKF->mvDynamicArea = mCurrentFrame.mvDynamicArea;
         mpLocalMapper->InsertKeyFrame(pKF);
+        
         mpPointCloudMapper->InsertKeyFrame(pKF, this->mImColor, this->mDepth);
-
-        mpLocalMapper->InsertKeyFrame(pKF);
+        mpLocalMapper->InsertKeyFrame(pKF); // ? 
 
         mpLocalMapper->SetNotStop(false);
 
