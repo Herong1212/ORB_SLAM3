@@ -53,30 +53,40 @@ namespace ORB_SLAM3
     //     std::cout << "This is a test! 阿哈哈哈哈哈哈哈哈哈哈！" << std::endl;
     // }
 
-    /**
-     * @brief 跟踪线程构造函数
-     * @param pSys 系统类指针
-     * @param pVoc 词典
-     * @param pFrameDrawer 画图像的
-     * @param pMapDrawer 画地图的
-     * @param pAtlas atlas
-     * @param pKFDB 关键帧词典数据库
-     * @param strSettingPath 参数文件路径
-     * @param sensor 传感器类型
-     * @param settings 参数类
-     * @param _strSeqName 序列名字，没用到
-     */
-    Tracking::Tracking(System *pSys, ORBVocabulary *pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Atlas *pAtlas, KeyFrameDatabase *pKFDB, const string &strSettingPath, const int sensor, Settings *settings, const string &_nameSeq) : mState(NO_IMAGES_YET), mSensor(sensor), mTrackedFr(0), mbStep(false),
-                                                                                                                                                                                                                                                  mbOnlyTracking(false), mbMapUpdated(false), mbVO(false), mpORBVocabulary(pVoc), mpKeyFrameDB(pKFDB),
-                                                                                                                                                                                                                                                  mbReadyToInitializate(false), mpSystem(pSys), mpViewer(NULL), bStepByStep(false),
-                                                                                                                                                                                                                                                  mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
-                                                                                                                                                                                                                                                  mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame *>(NULL))
+    // ps：跟踪线程构造函数，用于初始化跟踪线程的各种成员变量和依赖对象，并从配置文件中加载参数。
+    Tracking::Tracking(System *pSys,                                    // 指向系统类的指针，用于全局管理 SLAM 流程
+                       ORBVocabulary *pVoc,                             // 词典，用于回环检测和关键帧的词袋模型构建
+                       FrameDrawer *pFrameDrawer,                       // 绘制当前帧特征点和轨迹的可视化模块
+                       MapDrawer *pMapDrawer,                           // 绘制地图点和关键帧的可视化模块
+                       Atlas *pAtlas,                                   // 地图管理器，用于管理全局地图、子地图等结构
+                       KeyFrameDatabase *pKFDB,                         // 关键帧数据库，用于快速查找相似关键帧，配合词典进行回环检测
+                       const string &strSettingPath,                    // 配置文件路径，包含相机、ORB、IMU 参数等配置
+                       const int sensor,                                // 传感器类型，如单目、双目、RGB-D 或 VIO 模式
+                       Settings *settings,                              // 参数类指针，若不为空，直接从该类加载参数，而不是读取配置文件
+                       const string &_nameSeq) :                        // ! 序列名称（不常用，仅用于日志记录或调试）
+                                                 mState(NO_IMAGES_YET), // 初始状态为未处理图像
+                                                 mSensor(sensor),       // 传感器类型
+                                                 mTrackedFr(0),         // 已跟踪的帧数量
+                                                 mbStep(false),
+                                                 mbOnlyTracking(false), // 是否仅追踪模式
+                                                 mbMapUpdated(false),
+                                                 mbVO(false),
+                                                 mpORBVocabulary(pVoc), // 初始化 ORB 词典
+                                                 mpKeyFrameDB(pKFDB),
+                                                 mbReadyToInitializate(false),
+                                                 mpSystem(pSys), // 初始化系统指针
+                                                 mpViewer(NULL),
+                                                 bStepByStep(false),
+                                                 mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
+                                                 mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr), mpLastKeyFrame(static_cast<KeyFrame *>(NULL))
     {
-        // Load camera parameters from settings file
+        // Step 1 从配置文件中加载相机参数
         if (settings)
         {
             newParameterLoader(settings);
         }
+
+        // 否则，从配置文件中解析参数
         else
         {
             cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
@@ -1728,7 +1738,7 @@ namespace ORB_SLAM3
 
     // notice4：获取 IMU 数据
     /**
-     * @brief 将imu数据存放在mlQueueImuData的list链表里
+     * @brief 将 imu 数据存放在 mlQueueImuData 的 list链表 里
      * @param[in] imuMeasurement
      */
     void Tracking::GrabImuData(const IMU::Point &imuMeasurement)
@@ -3556,15 +3566,19 @@ namespace ORB_SLAM3
             }
         }
 
-        // TODO--点云
         pKF->mvDynamicArea = mCurrentFrame.mvDynamicArea;
-        mpLocalMapper->InsertKeyFrame(pKF);
-        
-        mpPointCloudMapper->InsertKeyFrame(pKF, this->mImColor, this->mDepth);
-        mpLocalMapper->InsertKeyFrame(pKF); // ? 
 
+        // Step 4：插入关键帧
+        // 关键帧插入到列表 mlNewKeyFrames中，等待local mapping线程临幸
+        mpLocalMapper->InsertKeyFrame(pKF);
+
+        // TODO 点云
+        mpPointCloudMapper->InsertKeyFrame(pKF, this->mImColor, this->mDepth);
+
+        // 插入好了，允许局部建图停止
         mpLocalMapper->SetNotStop(false);
 
+        // 当前帧成为新的关键帧，更新
         mnLastKeyFrameId = mCurrentFrame.mnId;
         mpLastKeyFrame = pKF;
     }
@@ -4037,7 +4051,7 @@ namespace ORB_SLAM3
         }
     }
 
-    // 整个追踪线程执行复位操作
+    // 全局重置：整个追踪线程执行复位操作，清除所有跟踪状态和地图
     void Tracking::Reset(bool bLocMap)
     {
         Verbose::PrintMess("System Reseting", Verbose::VERBOSITY_NORMAL);
@@ -4098,7 +4112,7 @@ namespace ORB_SLAM3
         Verbose::PrintMess("   End reseting! ", Verbose::VERBOSITY_NORMAL);
     }
 
-    // 重置当前活动地图，就是把这个地图的所有数据都清空，注意与新建地图的区别！
+    // 局部重置：清除当前活动地图，保留系统状态
     void Tracking::ResetActiveMap(bool bLocMap)
     {
         Verbose::PrintMess("Active map Reseting", Verbose::VERBOSITY_NORMAL);

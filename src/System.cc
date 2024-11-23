@@ -39,9 +39,20 @@ namespace ORB_SLAM3
 
     Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 
-    System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
-                   const bool bUseViewer, const int initFr, const string &strSequence) : mSensor(sensor), mpViewer(static_cast<Viewer *>(NULL)), mbReset(false), mbResetActiveMap(false),
-                                                                                         mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
+    // PS 作用：系统的构造函数，将会启动其他的线程，灰常重要嗷！！！
+    System::System(const string &strVocFile,                                           // 词袋文件所在路径
+                   const string &strSettingsFile,                                      // 配置文件所在路径
+                   const eSensor sensor,                                               // 传感器类型
+                   const bool bUseViewer,                                              // 是否使用可视化界面
+                   const int initFr,                                                   // initFr 表示初始化帧的 id, 开始设置为 0
+                   const string &strSequence) :                                        // 序列名，在【跟踪线程】和【局部建图线程】用得到
+                                                mSensor(sensor),                       // 初始化传感器类型
+                                                mpViewer(static_cast<Viewer *>(NULL)), // TODO 空。。。对象指针？
+                                                mbReset(false),                        // 无复位标志
+                                                mbResetActiveMap(false),
+                                                mbActivateLocalizationMode(false),   // 没有这个模式转换标志
+                                                mbDeactivateLocalizationMode(false), // 没有这个模式转换标志
+                                                mbShutDown(false)
     {
         // Output welcome message
         cout << endl
@@ -55,36 +66,45 @@ namespace ORB_SLAM3
         cout << "Input sensor was set to: ";
 
         if (mSensor == MONOCULAR)
-            cout << "Monocular" << endl;
+            cout << "Monocular" << endl; // 单目
         else if (mSensor == STEREO)
-            cout << "Stereo" << endl;
+            cout << "Stereo" << endl; // 双目
         else if (mSensor == RGBD)
-            cout << "RGB-D" << endl;
+            cout << "RGB-D" << endl; // RGBD相机
         else if (mSensor == IMU_MONOCULAR)
-            cout << "Monocular-Inertial" << endl;
+            cout << "Monocular-Inertial" << endl; // 单目 + imu
         else if (mSensor == IMU_STEREO)
-            cout << "Stereo-Inertial" << endl;
+            cout << "Stereo-Inertial" << endl; // 双目 + imu
         else if (mSensor == IMU_RGBD)
-            cout << "RGB-D-Inertial" << endl;
+            cout << "RGB-D-Inertial" << endl; // RGBD相机 + imu
 
-        // Check settings file
+        //  Step 2 读取配置文件（Check settings file）
         cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
+
+        // 如果打开失败，就输出错误信息
         if (!fsSettings.isOpened())
         {
             cerr << "Failed to open settings file at: " << strSettingsFile << endl;
             exit(-1);
         }
 
-        cv::FileNode node = fsSettings["File.version"];
+        // 查看配置文件版本，不同版本有不同处理方法
+        cv::FileNode node = fsSettings["File.version"]; // FileNode 是 OpenCV 中的类，表示一个 YAML 或 XML 文件的节点。用于获取文件中的具体参数。
+
+        // case1：配置文件是 1.0 版本
         if (!node.empty() && node.isString() && node.string() == "1.0")
         {
+            // 创建一个 Settings 对象，并将配置文件的路径和传感器类型（mSensor）传递给它。
             settings_ = new Settings(strSettingsFile, mSensor);
 
+            // 保存及加载地图的名字
             mStrLoadAtlasFromFile = settings_->atlasLoadFile();
             mStrSaveAtlasToFile = settings_->atlasSaveFile();
 
+            // ps：这里是为了输出配置文件的相关参数，方便调试或检查设置。
             cout << (*settings_) << endl;
         }
+        // case2：配置文件不是 1.0 版本，大多都是 1.0 版本的，所以这个略过即可。
         else
         {
             settings_ = nullptr;
@@ -101,20 +121,24 @@ namespace ORB_SLAM3
             }
         }
 
+        // 是否激活回环，默认是开着的
         node = fsSettings["loopClosing"];
         bool activeLC = true;
         if (!node.empty())
         {
+            // 如果配置文件中没有定义 loopClosing 键，则回环检测功能默认为激活状态
             activeLC = static_cast<int>(fsSettings["loopClosing"]) != 0;
         }
 
+        // 初始化词汇表文件路径
         mStrVocabularyFilePath = strVocFile;
 
         bool loadedAtlas = false;
 
+        // case1：如果 mStrLoadAtlasFromFile 是空的，表示没有提供先验的 Atlas 文件路径，系统需要从头创建一个新的 Atlas。
         if (mStrLoadAtlasFromFile.empty())
         {
-            // Load ORB Vocabulary
+            // Step 3 加载 ORB 字典
             cout << endl
                  << "Loading ORB Vocabulary. This could take a while..." << endl;
 
@@ -126,16 +150,20 @@ namespace ORB_SLAM3
                 cerr << "Falied to open at: " << strVocFile << endl;
                 exit(-1);
             }
-            cout << "Vocabulary loaded!" << endl
-                 << endl;
 
-            // Create KeyFrame Database
+            std::cout << "Vocabulary loaded!" << std::endl
+                      << std::endl;
+
+            //  Step 4 创建关键帧数据库
             mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
-            // Create the Atlas
+            //  Step 5 创建多地图，参数 0 表示初始化关键帧 id 为 0
+            // 如果没有提供 Atlas 文件路径：创建新 Atlas
             cout << "Initialization of Atlas from scratch " << endl;
-            mpAtlas = new Atlas(0);
+            mpAtlas = new Atlas(0); // 构造地图集 Atlas 类，参数 0 表示初始化关键帧 ID 为 0
         }
+
+        // case2：如果路径不为空，则尝试从指定的文件中加载 Atlas。一般就是从头开始新建地图吧！【所以下面代码不用看】
         else
         {
             // Load ORB Vocabulary
@@ -150,8 +178,9 @@ namespace ORB_SLAM3
                 cerr << "Falied to open at: " << strVocFile << endl;
                 exit(-1);
             }
-            cout << "Vocabulary loaded!" << endl
-                 << endl;
+
+            std::cout << "Vocabulary loaded!" << std::endl
+                      << std::endl;
 
             // Create KeyFrame Database
             mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
@@ -183,54 +212,100 @@ namespace ORB_SLAM3
             // usleep(10*1000*1000);
         }
 
+        // 如果是有 imu 的传感器类型，设置 mbIsInertial = true; 以后的【跟踪】和【预积分】将和这个标志有关。
+        // 根据传感器类型（mSensor）决定是否调用 mpAtlas->SetInertialSensor() 方法，目的是在地图（Atlas）中启用惯性传感器的支持。
+        // ps：这在使用 IMU 数据的 SLAM 系统中是常见的设置！
         if (mSensor == IMU_STEREO || mSensor == IMU_MONOCULAR || mSensor == IMU_RGBD)
+        {
             mpAtlas->SetInertialSensor();
+            std::cout << "Inertial sensor support enabled in Atlas." << std::endl; // 调试用
+        }
+        // 扩展：如果未来需要支持更多类型的 IMU 或传感器，可以将条件判断改为更灵活的结构。例如，定义一个通用的标志位：
+        // bool isInertialSensor = (mSensor == IMU_STEREO || mSensor == IMU_MONOCULAR || mSensor == IMU_RGBD);
+        // if (isInertialSensor)
+        // {
+        //     mpAtlas->SetInertialSensor();
+        // }
 
         // TODO：Yolo
         mpDetector = new YoloDetection();
 
-        // Create Drawers. These are used by the Viewer
-        mpFrameDrawer = new FrameDrawer(mpAtlas);
+        // Step 6 依次创建跟踪、局部建图、闭环、显示线程
+        // 创建用于显示帧和地图的类，由 Viewer 调用
+        mpFrameDrawer = new FrameDrawer(mpAtlas); // new 后面要跟类名，表示创建一个类的对象
         mpMapDrawer = new MapDrawer(mpAtlas, strSettingsFile, settings_);
 
-        // Initialize the Tracking thread
-        //(it will live in the main thread of execution, the one that called this constructor)
+        // ps1：初始化跟踪线程（主线程），不会立刻开启，会在对图像和 imu 预处理后在 main 主线程中执行
         cout << "Seq. Name: " << strSequence << endl;
-        mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                                 mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+        mpTracker = new Tracking(this,                    // 表示当前 SLAM 系统实例，允许 Tracking 访问整个系统
+                                 mpVocabulary,            // 汇表，用于特征点描述符的匹配
+                                 mpFrameDrawer,           // 负责当前帧的可视化
+                                 mpMapDrawer,             // 负责地图的可视化
+                                 mpAtlas,                 // 地图管理模块，保存关键帧和地图点
+                                 mpKeyFrameDatabase,      // 关键帧数据库，用于回环检测
+                                 strSettingsFile,         // 配置文件路径
+                                 mSensor,                 // 传感器类型（如单目、立体、RGB-D）
+                                 settings_, strSequence); // 其他配置信息
 
         // TODO Yolo 句柄
         mpTracker->SetDetector(mpDetector);
 
         // TODO 点云
         mpPointCloudMapper = new PointCloudMapper();
-        mpTracker->mpPointCloudMapper = mpPointCloudMapper;
-        //  TODO 创建点云线程
-        mptPointCloudMapping = new thread(&PointCloudMapper::run, mpTracker->mpPointCloudMapper);
+        mpTracker->mpPointCloudMapper = mpPointCloudMapper; // 如果启用，这一步将 YOLO 检测器与跟踪线程关联，使其支持目标检测与跟踪任务
+        //  TODO 创建并启动点云处理线程
+        mptPointCloudMapping = new thread(&PointCloudMapper::Run, mpTracker->mpPointCloudMapper); // 将点云处理器 mpPointCloudMapper 关联到跟踪线程 mpTracker，便于跟踪模块调用点云相关功能
 
-        // Initialize the Local Mapping thread and launch
-        mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor == MONOCULAR || mSensor == IMU_MONOCULAR,
-                                         mSensor == IMU_MONOCULAR || mSensor == IMU_STEREO || mSensor == IMU_RGBD, strSequence);
+        // ps2：创建并启动局部建图线程（Local Mapping）
+        mpLocalMapper = new LocalMapping(this,                                                                     // 当前 SLAM 系统实例
+                                         mpAtlas,                                                                  // 地图管理模块
+                                         mSensor == MONOCULAR || mSensor == IMU_MONOCULAR,                         // 是否为单目传感器
+                                         mSensor == IMU_MONOCULAR || mSensor == IMU_STEREO || mSensor == IMU_RGBD, // 是否支持惯性传感器
+                                         strSequence);                                                             // 序列名称
         mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run, mpLocalMapper);
         mpLocalMapper->mInitFr = initFr;
+
+        // 设置最远 3D 地图点的深度值，如果超过阈值，说明可能三角化不太准确，丢弃
+        // 即：设置一个阈值 mThFarPoints，用于过滤那些距离相机超过指定范围的 3D 地图点
+        // ? 这里有个疑问，settings_ 和 fsSettings 访问 thFarPoints 变量的值有什么不一样，不都是读取的一个配置文件（手动传入命令行的那个）？
         if (settings_)
             mpLocalMapper->mThFarPoints = settings_->thFarPoints();
         else
             mpLocalMapper->mThFarPoints = fsSettings["thFarPoints"];
-        if (mpLocalMapper->mThFarPoints != 0)
+
+        // ? 这里有个疑问，C++ 中浮点型跟 0 比较是否用精确?
+        // if (mpLocalMapper->mThFarPoints != 0)
+        // {
+        //     cout << "Discard points further than " << mpLocalMapper->mThFarPoints << " m from current camera" << endl;
+        //     mpLocalMapper->mbFarPoints = true;
+        // }
+        // else
+        //     mpLocalMapper->mbFarPoints = false;
+
+        // ! 如果 ThFarPoints 是 int 类型，这里可以直接与 0 作比较，如果是 float 建议采用 epsion 方法
+        const double epsion = 1e-6;
+        if (std::abs(mpLocalMapper->mThFarPoints) > epsion)
         {
-            cout << "Discard points further than " << mpLocalMapper->mThFarPoints << " m from current camera" << endl;
+            // 深度阈值不为 0 -- 表示剔除远点，也就是启用剔除逻辑
+            std::cout << "Discard points further than " << mpLocalMapper->mThFarPoints << " m from current camera!" << std::endl;
             mpLocalMapper->mbFarPoints = true;
         }
         else
+        {
+            // 深度阈值为 0 -- 表示不剔除任何点，不就是禁用剔除逻辑
             mpLocalMapper->mbFarPoints = false;
+        }
 
-        // Initialize the Loop Closing thread and launch
-        //  mSensor!=MONOCULAR && mSensor!=IMU_MONOCULAR
-        mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor != MONOCULAR, activeLC); // mSensor!=MONOCULAR);
+        // ps3：创建并启动回环检测线程（Loop Closing）
+        // mSensor != MONOCULAR && mSensor != IMU_MONOCULAR
+        mpLoopCloser = new LoopClosing(mpAtlas,              // 地图管理模块
+                                       mpKeyFrameDatabase,   // 关键帧数据库，用于高效回环检测
+                                       mpVocabulary,         // 词汇表，用于回环检测中的关键帧相似性计算
+                                       mSensor != MONOCULAR, // 是否使用立体或 RGB-D 传感器（单目通常不执行回环检测）
+                                       activeLC);            // 是否启用回环检测
         mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
 
-        // Set pointers between threads
+        // 设置线程间的指针 --- 作用：建立各模块之间的关联，使它们能够协同工作。
         mpTracker->SetLocalMapper(mpLocalMapper);
         mpTracker->SetLoopClosing(mpLoopCloser);
 
@@ -242,7 +317,7 @@ namespace ORB_SLAM3
 
         // usleep(10*1000*1000);
 
-        // Initialize the Viewer thread and launch
+        // ps4：如果启用了 Viewer，则创建并启动可视化线程
         if (bUseViewer)
         // if(false) // TODO
         {
@@ -253,19 +328,30 @@ namespace ORB_SLAM3
             mpViewer->both = mpFrameDrawer->both;
         }
 
-        // Fix verbosity
+        // 打印输出中间的信息，设置为安静模式（Fix verbosity)
         Verbose::SetTh(Verbose::VERBOSITY_QUIET);
     }
 
-    Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point> &vImuMeas, string filename)
+    // --------------------------------------Track---------------------------------------------
+
+    // TODO1 双目输入时的追踪器接口---将左、右相机的图像输入到系统中，完成图像预处理、IMU 数据处理、系统状态检查，并最终调用跟踪模块处理输入数据
+    // 返回：Sophus::SE3f --- 当前帧的相机位姿，描述相机在世界坐标系中的旋转和平移
+    Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, // 左右相机的图像帧
+                                     const double &timestamp,                       // 当前图像帧的时间戳，用于同步 IMU 和图像数据
+                                     const vector<IMU::Point> &vImuMeas,            // 当前帧的 IMU 数据列表
+                                     string filename)                               // 当前图像帧对应的文件名
     {
+        // step1.检查传感器模式
         if (mSensor != STEREO && mSensor != IMU_STEREO)
         {
             cerr << "ERROR: you called TrackStereo but input sensor was not set to Stereo nor Stereo-Inertial." << endl;
             exit(-1);
         }
 
+        // step2. 图像预处理
         cv::Mat imLeftToFeed, imRightToFeed;
+
+        // case1：若需要畸变校正
         if (settings_ && settings_->needToRectify())
         {
             cv::Mat M1l = settings_->M1l();
@@ -276,22 +362,29 @@ namespace ORB_SLAM3
             cv::remap(imLeft, imLeftToFeed, M1l, M2l, cv::INTER_LINEAR);
             cv::remap(imRight, imRightToFeed, M1r, M2r, cv::INTER_LINEAR);
         }
+        // case2：若需要尺寸调整
         else if (settings_ && settings_->needToResize())
         {
             cv::resize(imLeft, imLeftToFeed, settings_->newImSize());
             cv::resize(imRight, imRightToFeed, settings_->newImSize());
         }
+        // case3：若不需要任何处理
         else
         {
             imLeftToFeed = imLeft.clone();
             imRightToFeed = imRight.clone();
         }
 
-        // Check mode change
+        // step3. 检查是否有运行模式的动态改变
         {
+            // TODO 锁住这个变量？防止其他的线程对它的更改？
+            // 独占锁，主要是为了 mbActivateLocalizationMode 和 mbDeactivateLocalizationMode 不会发生混乱
             unique_lock<mutex> lock(mMutexMode);
+
+            // case1：仅定位模式
             if (mbActivateLocalizationMode)
             {
+                // 调用局部建图器的请求停止函数
                 mpLocalMapper->RequestStop();
 
                 // Wait until Local Mapping has effectively stopped
@@ -300,26 +393,39 @@ namespace ORB_SLAM3
                     usleep(1000);
                 }
 
-                mpTracker->InformOnlyTracking(true);
-                mbActivateLocalizationMode = false;
+                // 运行到这里的时候，局部建图部分就真正地停止了。告知追踪器，现在 仅进行跟踪而不更新地图
+                // 局部地图关闭以后，只进行追踪的线程，只计算相机的位姿，没有对局部地图进行更新
+                mpTracker->InformOnlyTracking(true); // 定位时，只跟踪
+                // 关闭线程可以使得别的线程得到更多的资源
+                mbActivateLocalizationMode = false; // 同时清除定位标记，防止重复执行
             }
+            // case2：SLAM 模式
             if (mbDeactivateLocalizationMode)
             {
+                // 如果取消定位模式。告知追踪器，现在地图构建部分也要开始工作了！
                 mpTracker->InformOnlyTracking(false);
+                // 重新启动局部建图线程
                 mpLocalMapper->Release();
-                mbDeactivateLocalizationMode = false;
+                mbDeactivateLocalizationMode = false; // 清除标志，防止重复执行
             }
         }
 
-        // Check reset
+        // step4. 检查是否需要重置
         {
             unique_lock<mutex> lock(mMutexReset);
+
+            // * 通过检查变量 mbReset 和 mbResetActiveMap，决定是否执行全局或局部重置
+            // case1：全局重置！调用 mpTracker->Reset()，清除所有跟踪状态和地图
             if (mbReset)
             {
+                // 追踪器复位
                 mpTracker->Reset();
+                // 清除标志
                 mbReset = false;
                 mbResetActiveMap = false;
             }
+
+            // case2：局部重置！调用 mpTracker->ResetActiveMap()，只清除当前活动地图，保留系统状态
             else if (mbResetActiveMap)
             {
                 mpTracker->ResetActiveMap();
@@ -327,45 +433,64 @@ namespace ORB_SLAM3
             }
         }
 
+        // step5. 处理 IMU 数据
         if (mSensor == System::IMU_STEREO)
             for (size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
                 mpTracker->GrabImuData(vImuMeas[i_imu]);
 
-        // std::cout << "start GrabImageStereo" << std::endl;
+        std::cout << "start GrabImageStereo" << std::endl;
+
+        // step6. 主跟踪逻辑。用矩阵 Tcw 来保存估计的相机 位姿，运动追踪器的【GrabImageStereo函数】才是真正进行运动估计的函数！
         Sophus::SE3f Tcw = mpTracker->GrabImageStereo(imLeftToFeed, imRightToFeed, timestamp, filename);
 
-        // std::cout << "out grabber" << std::endl;
+        std::cout << "out grabber" << std::endl;
 
+        // step7. 更新系统状态
         unique_lock<mutex> lock2(mMutexState);
+        // 1、获取运动追踪状态
         mTrackingState = mpTracker->mState;
+        // 2、获取当前帧追踪到的地图点向量指针
         mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
+        // 3、获取当前帧追踪到的关键帧特征点向量的指针
         mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
 
+        // 返回获得的相机运动估计
         return Tcw;
     }
 
-    Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const double &timestamp, const vector<IMU::Point> &vImuMeas, string filename)
+    // TODO2 当输入图像为 RGBD 时进行的追踪，参数就不在一一说明了------追踪深度相机数据，返回 mpTracker->GrabImageRGBD(im,depthmap,timestamp)
+    Sophus::SE3f System::TrackRGBD(const cv::Mat &im,                  // RGB 彩色图像帧，类型为 cv::Mat，作为当前帧的输入，用于特征提取与匹配
+                                   const cv::Mat &depthmap,            // 深度图帧，类型为 cv::Mat，包含像素的深度信息（通常单位为米）
+                                   const double &timestamp,            // 当前帧的时间戳，用于与 IMU 数据同步
+                                   const vector<IMU::Point> &vImuMeas, // 当前帧的 IMU 数据列表，类型为 vector<IMU::Point>
+                                   string filename)                    // 当前帧的图像文件名，可能用于调试或日志记录
     {
+        // step1. 检查传感器模式
         if (mSensor != RGBD && mSensor != IMU_RGBD)
         {
             cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
             exit(-1);
         }
 
+        // step2. 图像预处理
         cv::Mat imToFeed = im.clone();
         cv::Mat imDepthToFeed = depthmap.clone();
+
         if (settings_ && settings_->needToResize())
         {
-            cv::Mat resizedIm;
-            cv::resize(im, resizedIm, settings_->newImSize());
-            imToFeed = resizedIm;
+            // cv::Mat resizedIm;
+            // cv::resize(im, resizedIm, settings_->newImSize());
+            // imToFeed = resizedIm;
+
+            cv::resize(im, imToFeed, settings_->newImSize()); // 上面太过冗余，中间变量 resizedIm 没必要阿！
 
             cv::resize(depthmap, imDepthToFeed, settings_->newImSize());
         }
 
-        // Check mode change
+        // step3. 检查运行模式的动态切换
         {
             unique_lock<mutex> lock(mMutexMode);
+
             if (mbActivateLocalizationMode)
             {
                 mpLocalMapper->RequestStop();
@@ -387,9 +512,10 @@ namespace ORB_SLAM3
             }
         }
 
-        // Check reset
+        // step4. 检查是否需要重置
         {
             unique_lock<mutex> lock(mMutexReset);
+
             if (mbReset)
             {
                 mpTracker->Reset();
@@ -403,12 +529,15 @@ namespace ORB_SLAM3
             }
         }
 
+        // step5. 处理 IMU 数据
         if (mSensor == System::IMU_RGBD)
             for (size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
                 mpTracker->GrabImuData(vImuMeas[i_imu]);
 
+        // step6. 跟踪 RGB-D 数据，处理当前帧的 RGB 图像和深度图，计算当前帧的位姿 Tcw
         Sophus::SE3f Tcw = mpTracker->GrabImageRGBD(imToFeed, imDepthToFeed, timestamp, filename);
 
+        // step7. 更新跟踪状态
         unique_lock<mutex> lock2(mMutexState);
         mTrackingState = mpTracker->mState;
         mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
@@ -416,7 +545,11 @@ namespace ORB_SLAM3
         return Tcw;
     }
 
-    Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, const vector<IMU::Point> &vImuMeas, string filename)
+    // TODO3 同理，输入为单目图像时的追踪器接口------追踪单目相机数据返回 mpTracker->GrabImageMonocular(im,timestamp)
+    Sophus::SE3f System::TrackMonocular(const cv::Mat &im,                  // 灰度图像
+                                        const double &timestamp,            // 图像时间戳
+                                        const vector<IMU::Point> &vImuMeas, // 上一帧到当前帧图像之间的IMU测量值
+                                        string filename)                    // 调试用的文件名
     {
 
         {
@@ -434,19 +567,20 @@ namespace ORB_SLAM3
         cv::Mat imToFeed = im.clone();
         if (settings_ && settings_->needToResize())
         {
-            cv::Mat resizedIm;
-            cv::resize(im, resizedIm, settings_->newImSize());
-            imToFeed = resizedIm;
+            // cv::Mat resizedIm;
+            // cv::resize(im, resizedIm, settings_->newImSize());
+            // imToFeed = resizedIm;
+
+            cv::resize(im, imToFeed, settings_->newImSize());
         }
 
-        // Check mode change
         {
             unique_lock<mutex> lock(mMutexMode);
+
             if (mbActivateLocalizationMode)
             {
                 mpLocalMapper->RequestStop();
 
-                // Wait until Local Mapping has effectively stopped
                 while (!mpLocalMapper->isStopped())
                 {
                     usleep(1000);
@@ -463,9 +597,9 @@ namespace ORB_SLAM3
             }
         }
 
-        // Check reset
         {
             unique_lock<mutex> lock(mMutexReset);
+
             if (mbReset)
             {
                 mpTracker->Reset();
@@ -494,6 +628,8 @@ namespace ORB_SLAM3
         return Tcw;
     }
 
+    // ---------------------------------Mode select--------------------------------------------------
+
     void System::ActivateLocalizationMode()
     {
         unique_lock<mutex> lock(mMutexMode);
@@ -505,6 +641,8 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexMode);
         mbDeactivateLocalizationMode = true;
     }
+
+    // -----------------------------------------------------------------------------------
 
     bool System::MapChanged()
     {
@@ -519,6 +657,8 @@ namespace ORB_SLAM3
             return false;
     }
 
+    // ------------------------------Reset Mode-----------------------------------------------------
+
     void System::Reset()
     {
         unique_lock<mutex> lock(mMutexReset);
@@ -530,6 +670,8 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexReset);
         mbResetActiveMap = true;
     }
+
+    // -----------------------------------------------------------------------------------
 
     void System::Shutdown()
     {
@@ -583,6 +725,8 @@ namespace ORB_SLAM3
         unique_lock<mutex> lock(mMutexReset);
         return mbShutDown;
     }
+
+    // ----------------------------------Save Trajectory-------------------------------------------------
 
     void System::SaveTrajectoryTUM(const string &filename)
     {
@@ -1281,6 +1425,8 @@ namespace ORB_SLAM3
         }
         f.close();
     }
+
+    // -------------------------------------------------------------------------------------------------
 
     void System::SaveDebugData(const int &initIdx)
     {

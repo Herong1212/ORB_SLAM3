@@ -28,11 +28,28 @@
 
 namespace ORB_SLAM3
 {
-
+    /**
+     * @brief 局部地图线程构造函数
+     * @param pSys 系统类指针
+     * @param pAtlas atlas
+     * @param bMonocular 是否是单目 (bug)用float赋值了
+     * @param bInertial 是否是惯性模式
+     * @param _strSeqName 序列名字，没用到
+     */
     LocalMapping::LocalMapping(System *pSys, Atlas *pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName) : mpSystem(pSys), mbMonocular(bMonocular), mbInertial(bInertial), mbResetRequested(false), mbResetRequestedActiveMap(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas), bInitializing(false),
                                                                                                                                  mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true),
                                                                                                                                  mIdxInit(0), mScale(1.0), mInitSect(0), mbNotBA1(true), mbNotBA2(true), mIdxIteration(0), infoInertial(Eigen::MatrixXd::Zero(9, 9))
     {
+        /*
+         * mbStopRequested:    外部线程调用，为true，表示外部线程请求停止 local mapping
+         * mbStopped:          为true表示可以并终止localmapping 线程
+         * mbNotStop:          true，表示不要停止 localmapping 线程，因为要插入关键帧了。需要和 mbStopped 结合使用
+         * mbAcceptKeyFrames:  true，允许接受关键帧。tracking 和local mapping 之间的关键帧调度
+         * mbAbortBA:          是否流产BA优化的标志位
+         * mbFinishRequested:  请求终止当前线程的标志。注意只是请求，不一定终止。终止要看 mbFinished
+         * mbResetRequested:   请求当前线程复位的标志。true，表示一直请求复位，但复位还未完成；表示复位完成为false
+         * mbFinished:         判断最终LocalMapping::Run() 是否完成的标志。
+         */
         mnMatchesInliers = 0;
 
         mbBadImu = false;
@@ -48,27 +65,40 @@ namespace ORB_SLAM3
 #endif
     }
 
+    /**
+     * @brief 设置回环类指针
+     * @param pLoopCloser 回环类指针
+     */
     void LocalMapping::SetLoopCloser(LoopClosing *pLoopCloser)
     {
         mpLoopCloser = pLoopCloser;
     }
 
+    /**
+     * @brief 设置跟踪类指针
+     * @param pLoopCloser 跟踪类指针
+     */
     void LocalMapping::SetTracker(Tracking *pTracker)
     {
         mpTracker = pTracker;
     }
 
+    // NOTE：线程主函数，大 Boss， 非常重要的！！！
     void LocalMapping::Run()
     {
+        // 标记状态，表示当前 run 函数正在运行，尚未结束
         mbFinished = false;
 
         while (1)
         {
             // Tracking will see that Local Mapping is busy
+            // Step 1 告诉 Tracking，LocalMapping 正处于繁忙状态，请不要给我发送关键帧打扰我
+            // LocalMapping 线程处理的关键帧都是 Tracking 线程发过来的
+            // notice1 要进行局部建图过程了，所以先不接收来自【跟踪线程】的关键帧了，等下面一系列过程处理完再接收；
             SetAcceptKeyFrames(false);
 
-            // Check if there are keyframes in the queue
-            if (CheckNewKeyFrames() && !mbBadImu)
+            // 等待处理的关键帧列表不为空 并且 imu 正常 --- 即队列里有已经存在的关键帧，就需要先处理完已经存在的，再去接收新的
+            if (CheckNewKeyFrames() && !mbBadImu) // todo 检查有没有关键帧，如果有的话，并且 IMU 正常，则开始依次执行下面的代码
             {
 #ifdef REGISTER_TIMES
                 double timeLBA_ms = 0;
@@ -76,7 +106,7 @@ namespace ORB_SLAM3
 
                 std::chrono::steady_clock::time_point time_StartProcessKF = std::chrono::steady_clock::now();
 #endif
-                // BoW conversion and insertion in Map
+                // Step 2 处理列表中的关键帧，包括计算 BoW、更新观测、描述子、共视图，插入到地图等
                 ProcessNewKeyFrame();
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndProcessKF = std::chrono::steady_clock::now();
@@ -85,7 +115,7 @@ namespace ORB_SLAM3
                 vdKFInsert_ms.push_back(timeProcessKF);
 #endif
 
-                // Check recent MapPoints
+                // Step 3 根据地图点的观测情况剔除【质量不好】的地图点
                 MapPointCulling();
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndMPCulling = std::chrono::steady_clock::now();
@@ -94,15 +124,21 @@ namespace ORB_SLAM3
                 vdMPCulling_ms.push_back(timeMPCulling);
 #endif
 
-                // Triangulate new MapPoints
+                // Step 4 当前关键帧与相邻关键帧通过【三角化】产生新的地图点，使得跟踪更稳
                 CreateNewMapPoints();
 
+                // todo：注意 orbslam2 中放在了函数 SearchInNeighbors（用到了 mbAbortBA ）后面，应该放这里更合适
                 mbAbortBA = false;
 
+                // 已经处理完队列中的最后的一个关键帧（即都处理完之后），没有新的关键帧要进来了，就执行融合
                 if (!CheckNewKeyFrames())
                 {
+                    // Step 5 检查并融合当前关键帧与相邻关键帧帧（两级相邻）中重复的地图点
                     // Find more matches in neighbor keyframes and fuse point duplications
-                    SearchInNeighbors();
+                    // 先完成相邻关键帧与当前关键帧的地图点的融合（在相邻关键帧中查找当前关键帧的地图点），
+                    // 再完成当前关键帧与相邻关键帧的地图点的融合（在当前关键帧中查找当前相邻关键帧的地图点）
+                    // 目的：在当前关键帧及其相邻的关键帧中寻找更多的匹配，并融合重复的地图点。
+                    SearchInNeighbors(); // 搜索邻域匹配，检查并融合当前关键帧与相邻帧（两级相邻）重复的地图点
                 }
 
 #ifdef REGISTER_TIMES
@@ -118,6 +154,8 @@ namespace ORB_SLAM3
                 int num_MPs_BA = 0;
                 int num_edges_BA = 0;
 
+                // notice：这里不同于 ORB-SLAM2 的方式
+                // 已经处理完队列中的最后的一个关键帧，并且闭环检测没有请求停止 LocalMapping 线程
                 if (!CheckNewKeyFrames() && !stopRequested())
                 {
                     if (mpAtlas->KeyFramesInMap() > 2)
@@ -245,7 +283,8 @@ namespace ORB_SLAM3
                 vdLBASync_ms.push_back(timeKFCulling_ms);
                 vdKFCullingSync_ms.push_back(timeKFCulling_ms);
 #endif
-
+                // Step 10 将当前帧加入到闭环检测队列中
+                // 注意这里的关键帧被设置成为了 bad 的情况, 这个需要注意
                 mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
 
 #ifdef REGISTER_TIMES
@@ -255,45 +294,54 @@ namespace ORB_SLAM3
                 vdLMTotal_ms.push_back(timeLocalMap);
 #endif
             }
+            // 当要终止当前线程的时候
             else if (Stop() && !mbBadImu)
             {
                 // Safe area to stop
                 while (isStopped() && !CheckFinish())
                 {
+                    // 如果还没有结束利索，那么等等它
                     usleep(3000);
+                    // std::this_thread::sleep_for(std::chrono::milliseconds(3));  ORB-SLAM2 中这样用的
                 }
+                // 然后确定终止了就跳出这个线程的主循环
                 if (CheckFinish())
                     break;
             }
 
+            // 查看是否有复位线程的请求
             ResetIfRequested();
 
-            // Tracking will see that Local Mapping is busy
+            // notice2 OK，处理完了，现在可以开始接收来自【跟踪线程】的关键帧了
             SetAcceptKeyFrames(true);
 
+            // 如果当前线程已经结束了就跳出主循环
             if (CheckFinish())
                 break;
 
             usleep(3000);
         }
 
+        // 设置线程已经终止
         SetFinish();
     }
 
     void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexNewKFs);
-        
+
         mlNewKeyFrames.push_back(pKF);
         mbAbortBA = true;
     }
 
+    // 查看列表中是否有等待被插入的关键帧
     bool LocalMapping::CheckNewKeyFrames()
     {
         unique_lock<mutex> lock(mMutexNewKFs);
         return (!mlNewKeyFrames.empty());
     }
 
+    // 处理列表中的关键帧，包括计算 BoW、更新观测、描述子、共视图，插入到地图等
     void LocalMapping::ProcessNewKeyFrame()
     {
         {
@@ -824,6 +872,7 @@ namespace ORB_SLAM3
         mpCurrentKeyFrame->UpdateConnections();
     }
 
+    // 外部线程调用，请求停止当前线程的工作; 其实是【回环检测】线程调用，来避免在进行全局优化的过程中局部建图线程添加新的关键帧
     void LocalMapping::RequestStop()
     {
         unique_lock<mutex> lock(mMutexStop);
@@ -857,14 +906,17 @@ namespace ORB_SLAM3
         return mbStopRequested;
     }
 
+    // 释放当前还在缓冲区中的关键帧指针
     void LocalMapping::Release()
     {
         unique_lock<mutex> lock(mMutexStop);
         unique_lock<mutex> lock2(mMutexFinish);
+
         if (mbFinished)
             return;
         mbStopped = false;
         mbStopRequested = false;
+
         for (list<KeyFrame *>::iterator lit = mlNewKeyFrames.begin(), lend = mlNewKeyFrames.end(); lit != lend; lit++)
             delete *lit;
         mlNewKeyFrames.clear();

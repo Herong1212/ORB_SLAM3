@@ -148,6 +148,17 @@ namespace ORB_SLAM3
         }
     }
 
+    // ps：该构造函数用于初始化 Settings 类的对象
+    /**
+     * @brief 该构造函数用于初始化 Settings 类的对象
+     *
+     * @param configFile            常量引用，指向一个 std::string 类型的变量 configFile。它通常用于传递一个配置文件路径或名称，用于配置对象的初始化。
+     * @param sensor                常量引用，指向一个 int 类型的变量 sensor，通常代表传感器的编号或标识。
+     * @param bNeedToUndistort_     被初始化为 false，表示是否需要进行去畸变操作。
+     * @param bNeedToRectify_       被初始化为 false，表示是否需要进行图像矫正操作。
+     * @param bNeedToResize1_       下面两个都被初始化为 false，表示是否需要调整图像尺寸（可能是两个不同的尺寸调整操作）。
+     * @param bNeedToResize2_
+     */
     Settings::Settings(const std::string &configFile, const int &sensor) : bNeedToUndistort_(false), bNeedToRectify_(false), bNeedToResize1_(false), bNeedToResize2_(false)
     {
         sensor_ = sensor;
@@ -166,11 +177,11 @@ namespace ORB_SLAM3
             cout << "Loading settings from " << configFile << endl;
         }
 
-        // Read first camera
+        // 读取第一个相机
         readCamera1(fSettings);
         cout << "\t-Loaded camera 1" << endl;
 
-        // Read second camera if stereo (not rectified)
+        // 如果是双目相机，就读取第二个相机（未校正的）
         if (sensor_ == System::STEREO || sensor_ == System::IMU_STEREO)
         {
             readCamera2(fSettings);
@@ -211,6 +222,7 @@ namespace ORB_SLAM3
         cout << "----------------------------------" << endl;
     }
 
+    // 读取第一个相机
     void Settings::readCamera1(cv::FileStorage &fSettings)
     {
         bool found;
@@ -313,6 +325,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 读取第二个相机（双目相机时）
     void Settings::readCamera2(cv::FileStorage &fSettings)
     {
         bool found;
@@ -397,6 +410,7 @@ namespace ORB_SLAM3
         thDepth_ = readParameter<float>(fSettings, "Stereo.ThDepth", found);
     }
 
+    // 读取与相机相关的图像信息，并根据读取的数据调整内部参数
     void Settings::readImageInfo(cv::FileStorage &fSettings)
     {
         bool found;
@@ -462,6 +476,7 @@ namespace ORB_SLAM3
         bRGB_ = (bool)readParameter<int>(fSettings, "Camera.RGB", found);
     }
 
+    // 从配置文件中读取与 IMU（惯性测量单元）相关的参数，并将这些参数存储到类的相应成员变量中。
     void Settings::readIMU(cv::FileStorage &fSettings)
     {
         bool found;
@@ -485,6 +500,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 从配置文件中读取与 RGBD 图像相关的参数，并将这些参数存储到类的相应成员变量中。
     void Settings::readRGBD(cv::FileStorage &fSettings)
     {
         bool found;
@@ -495,6 +511,7 @@ namespace ORB_SLAM3
         bf_ = b_ * calibration1_->getParameter(0);
     }
 
+    // 从的配置文件（cv::FileStorage 类型）中读取 ORB 提取器相关的参数
     void Settings::readORB(cv::FileStorage &fSettings)
     {
         bool found;
@@ -502,14 +519,20 @@ namespace ORB_SLAM3
         nFeatures_ = readParameter<int>(fSettings, "ORBextractor.nFeatures", found);
         scaleFactor_ = readParameter<float>(fSettings, "ORBextractor.scaleFactor", found);
         nLevels_ = readParameter<int>(fSettings, "ORBextractor.nLevels", found);
+        // 初始 FAST 阈值，用于特征点检测。
         initThFAST_ = readParameter<int>(fSettings, "ORBextractor.iniThFAST", found);
+        // 最小 FAST 阈值，降低阈值后可以检测更多点
         minThFAST_ = readParameter<int>(fSettings, "ORBextractor.minThFAST", found);
     }
 
+    // 从配置文件中读取了一组用于控制 Viewer 外观和行为
+    // 的参数，涵盖了关键帧、图形线条、相机、视点以及图像查看比例等。
     void Settings::readViewer(cv::FileStorage &fSettings)
     {
         bool found;
+        // ps：keyFrameSize_ 中命名方式中的下划线 _ 是一种编程习惯，通常用于表示该变量是类的 成员变量
 
+        // 设置关键帧的尺寸，控制在 Viewer 中关键帧的可视化大小。
         keyFrameSize_ = readParameter<float>(fSettings, "Viewer.KeyFrameSize", found);
         keyFrameLineWidth_ = readParameter<float>(fSettings, "Viewer.KeyFrameLineWidth", found);
         graphLineWidth_ = readParameter<float>(fSettings, "Viewer.GraphLineWidth", found);
@@ -520,12 +543,15 @@ namespace ORB_SLAM3
         viewPointY_ = readParameter<float>(fSettings, "Viewer.ViewpointY", found);
         viewPointZ_ = readParameter<float>(fSettings, "Viewer.ViewpointZ", found);
         viewPointF_ = readParameter<float>(fSettings, "Viewer.ViewpointF", found);
+
+        // ps：在读取 imageViewScale 这个参数时，代码添加了一个缺省值机制：如果未找到该参数（即 found 为 false），它将使用默认值 1.0f。
         imageViewerScale_ = readParameter<float>(fSettings, "Viewer.imageViewScale", found, false);
 
         if (!found)
             imageViewerScale_ = 1.0f;
     }
 
+    // 从配置文件中读取与“加载”和“保存”功能相关的文件路径信息，并存储在类的成员变量中
     void Settings::readLoadAndSave(cv::FileStorage &fSettings)
     {
         bool found;
@@ -541,57 +567,68 @@ namespace ORB_SLAM3
         thFarPoints_ = readParameter<float>(fSettings, "System.thFarPoints", found, false);
     }
 
+    // ps：为立体相机的图像对进行预处理，具体包括计算立体校正映射、更新相机
+    // 参数和内外参矩阵，以便后续图像处理（如立体匹配和深度计算）能够在校正后的图像中进行
     void Settings::precomputeRectificationMaps()
     {
         // Precompute rectification maps, new calibrations, ...
+        // step1. 立体相机的校正矩阵计算
         cv::Mat K1 = static_cast<Pinhole *>(calibration1_)->toK();
         K1.convertTo(K1, CV_64F);
         cv::Mat K2 = static_cast<Pinhole *>(calibration2_)->toK();
         K2.convertTo(K2, CV_64F);
 
-        cv::Mat cvTlr;
+        // step2. 转换相机之间的位姿关系
+        cv::Mat cvTlr; // Tlr --- 表示从右相机到左相机的变换矩阵（通常是 4x4 的齐次矩阵）
         cv::eigen2cv(Tlr_.inverse().matrix3x4(), cvTlr);
+
         cv::Mat R12 = cvTlr.rowRange(0, 3).colRange(0, 3);
         R12.convertTo(R12, CV_64F);
         cv::Mat t12 = cvTlr.rowRange(0, 3).col(3);
         t12.convertTo(t12, CV_64F);
 
-        cv::Mat R_r1_u1, R_r2_u2;
-        cv::Mat P1, P2, Q;
+        // step3. 计算立体校正参数
+        cv::Mat R_r1_u1, R_r2_u2; // 用于校正左右相机图像的旋转矩阵
+        cv::Mat P1, P2;           // 校正后的投影矩阵
+        cv::Mat Q;                // 重投影矩阵，用于将视差图转换为深度图
 
         cv::stereoRectify(K1, camera1DistortionCoef(), K2, camera2DistortionCoef(), newImSize_,
                           R12, t12,
                           R_r1_u1, R_r2_u2, P1, P2, Q,
                           cv::CALIB_ZERO_DISPARITY, -1, newImSize_);
+
+        // step4. 计算图像的校正映射，用于将输入的原始图像矫正为无畸变且对齐的图像
         cv::initUndistortRectifyMap(K1, camera1DistortionCoef(), R_r1_u1, P1.rowRange(0, 3).colRange(0, 3),
                                     newImSize_, CV_32F, M1l_, M2l_);
         cv::initUndistortRectifyMap(K2, camera2DistortionCoef(), R_r2_u2, P2.rowRange(0, 3).colRange(0, 3),
                                     newImSize_, CV_32F, M1r_, M2r_);
 
-        // Update calibration
-        calibration1_->setParameter(P1.at<double>(0, 0), 0);
-        calibration1_->setParameter(P1.at<double>(1, 1), 1);
-        calibration1_->setParameter(P1.at<double>(0, 2), 2);
-        calibration1_->setParameter(P1.at<double>(1, 2), 3);
+        // step5. 使用校正后的投影矩阵 P1 更新左相机的内参参数
+        calibration1_->setParameter(P1.at<double>(0, 0), 0); // 焦距 fx
+        calibration1_->setParameter(P1.at<double>(1, 1), 1); // 焦距 fy
+        calibration1_->setParameter(P1.at<double>(0, 2), 2); // 主点 cx
+        calibration1_->setParameter(P1.at<double>(1, 2), 3); // 主点 cy
 
-        // Update bf
-        bf_ = b_ * P1.at<double>(0, 0);
+        // step6. 更新基线乘以焦距
+        bf_ = b_ * P1.at<double>(0, 0); // 基线长度（b_）乘以焦距（fx）
 
-        // Update relative pose between camera 1 and IMU if necessary
+        // step7. 更新 IMU 和相机的相对姿态
         if (sensor_ == System::IMU_STEREO)
         {
             Eigen::Matrix3f eigenR_r1_u1;
             cv::cv2eigen(R_r1_u1, eigenR_r1_u1);
-            Sophus::SE3f T_r1_u1(eigenR_r1_u1, Eigen::Vector3f::Zero());
+            Sophus::SE3f T_r1_u1(eigenR_r1_u1, Eigen::Vector3f::Zero()); // T_r1_u1 是校正后的旋转变换，将其逆应用于现有的 Tbc_
             Tbc_ = Tbc_ * T_r1_u1.inverse();
         }
     }
 
+    // ps：定义了一个 << 操作符的重载函数，目的是以人类可读的形式打印 Settings 类的内容
     ostream &operator<<(std::ostream &output, const Settings &settings)
     {
         output << "SLAM settings: " << endl;
 
         output << "\t-Camera 1 parameters (";
+
         if (settings.cameraType_ == Settings::PinHole || settings.cameraType_ == Settings::Rectified)
         {
             output << "Pinhole";
@@ -600,13 +637,17 @@ namespace ORB_SLAM3
         {
             output << "Kannala-Brandt";
         }
+
         output << ")" << ": [";
+
         for (size_t i = 0; i < settings.originalCalib1_->size(); i++)
         {
             output << " " << settings.originalCalib1_->getParameter(i);
         }
+
         output << " ]" << endl;
 
+        // 畸变参数
         if (!settings.vPinHoleDistorsion1_.empty())
         {
             output << "\t-Camera 1 distortion parameters: [ ";
@@ -628,7 +669,9 @@ namespace ORB_SLAM3
             {
                 output << "Kannala-Brandt";
             }
+
             output << "" << ": [";
+
             for (size_t i = 0; i < settings.originalCalib2_->size(); i++)
             {
                 output << " " << settings.originalCalib2_->getParameter(i);
@@ -646,6 +689,7 @@ namespace ORB_SLAM3
             }
         }
 
+        // 打印原始图像尺寸和当前图像尺寸（可能因缩放或校正而改变）
         output << "\t-Original image size: [ " << settings.originalImSize_.width << " , " << settings.originalImSize_.height << " ]" << endl;
         output << "\t-Current image size: [ " << settings.newImSize_.width << " , " << settings.newImSize_.height << " ]" << endl;
 
@@ -681,7 +725,7 @@ namespace ORB_SLAM3
 
         output << "\t-Sequence FPS: " << settings.fps_ << endl;
 
-        // Stereo stuff
+        // ps：如果是立体相机（STEREO 或 IMU_STEREO），打印立体相机的基线长度、深度阈值等信息
         if (settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO)
         {
             output << "\t-Stereo baseline: " << settings.b_ << endl;
@@ -696,6 +740,7 @@ namespace ORB_SLAM3
             }
         }
 
+        // ps：如果传感器包含 IMU，打印陀螺仪和加速度计的噪声、漂移（walk）参数，以及 IMU 的频率
         if (settings.sensor_ == System::IMU_MONOCULAR || settings.sensor_ == System::IMU_STEREO || settings.sensor_ == System::IMU_RGBD)
         {
             output << "\t-Gyro noise: " << settings.noiseGyro_ << endl;
@@ -705,6 +750,7 @@ namespace ORB_SLAM3
             output << "\t-IMU frequency: " << settings.imuFrequency_ << endl;
         }
 
+        // ps：如果是 RGB-D 传感器，打印深度图的比例因子（depthMapFactor_），该因子通常用于将原始深度值转换为实际距离
         if (settings.sensor_ == System::RGBD || settings.sensor_ == System::IMU_RGBD)
         {
             output << "\t-RGB-D depth map factor: " << settings.depthMapFactor_ << endl;

@@ -26,6 +26,7 @@
 namespace ORB_SLAM3
 {
 
+    // ps：SLAM 系统中用来存储地图和关键帧的核心数据结构
     Atlas::Atlas()
     {
         mpCurrentMap = static_cast<Map *>(NULL);
@@ -289,6 +290,7 @@ namespace ORB_SLAM3
     void Atlas::SetInertialSensor()
     {
         unique_lock<mutex> lock(mMutexAtlas);
+        
         mpCurrentMap->SetInertialSensor();
     }
 

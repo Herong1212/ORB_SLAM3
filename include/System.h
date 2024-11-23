@@ -211,7 +211,7 @@ namespace ORB_SLAM3
 
         // Map structure that stores the pointers to all KeyFrames and MapPoints.
         // Map* mpMap;
-        Atlas *mpAtlas;
+        Atlas *mpAtlas; // SLAM 系统中用来存储地图和关键帧的核心数据结构
 
         // Tracker. It receives a frame and computes the associated camera pose.
         // It also decides when to insert a new keyframe, create some new MapPoints and
@@ -230,10 +230,11 @@ namespace ORB_SLAM3
 
         FrameDrawer *mpFrameDrawer;
         MapDrawer *mpMapDrawer;
+        
         // todo 点云定义
         PointCloudMapper *mpPointCloudMapper;
 
-        // System threads: Local Mapping, Loop Closing, Viewer.
+        // ps：System threads: Local Mapping, Loop Closing, Viewer and PointCloud Mapping.
         // The Tracking thread "lives" in the main execution thread that creates the System object.
         std::thread *mptLocalMapping;
         std::thread *mptLoopClosing;
@@ -264,11 +265,12 @@ namespace ORB_SLAM3
         string mStrLoadAtlasFromFile;
         string mStrSaveAtlasToFile;
 
+        // 存储 ORB-SLAM 系统使用的词汇表文件路径（strVocFile）
         string mStrVocabularyFilePath;
 
         Settings *settings_;
 
-        // todo Yolo检测器
+        // todo Yolo 目标检测器
         YoloDetection *mpDetector;
     };
 

@@ -4,7 +4,6 @@
 
 #ifndef ORB_SLAM3_POINTCLOUDMAPPER_H
 #define ORB_SLAM3_POINTCLOUDMAPPER_H
-
 #include <iostream>
 #include <fstream>
 #include <opencv2/core/core.hpp>
@@ -19,33 +18,31 @@
 #include "KeyFrame.h"
 #include <pcl/common/transforms.h>
 
-// using namespace ORB_SLAM3;
+using namespace ORB_SLAM3;
+using namespace std;
 
-namespace ORB_SLAM3
+typedef pcl::PointXYZRGB PointT;
+typedef pcl::PointCloud<PointT> PointCloud;
+
+class PointCloudMapper
 {
+public:
+    PointCloudMapper();
 
-    typedef pcl::PointXYZRGB PointT;
-    typedef pcl::PointCloud<PointT> PointCloud;
+    void InsertKeyFrame(KeyFrame *kf, cv::Mat &imRGB, cv::Mat &imDepth);
 
-    class PointCloudMapper
-    {
-    public:
-        PointCloudMapper();
+    PointCloud::Ptr GeneratePointCloud(KeyFrame *kf, cv::Mat &imRGB, cv::Mat &imDepth);
 
-        void InsertKeyFrame(KeyFrame *kf, cv::Mat &imRGB, cv::Mat &imDepth);
+    void Run();
 
-        PointCloud::Ptr GeneratePointCloud(KeyFrame *kf, cv::Mat &imRGB, cv::Mat &imDepth);
+    queue<KeyFrame *> mqKeyFrame;
+    queue<cv::Mat> mqRGB;
+    queue<cv::Mat> mqDepth;
 
-        void run();
+    pcl::VoxelGrid<PointT>::Ptr mpVoxel;
+    std::mutex mmLoadKFMutex;
+    PointCloud::Ptr mpGlobalMap;
+    int mKeyFrameSize;
+};
 
-        queue<KeyFrame *> mqKeyFrame; // 关键帧队列
-        queue<cv::Mat> mqRGB;         // 新关键帧的 RGB 图像
-        queue<cv::Mat> mqDepth;       // 新关键帧的 深度图像
-
-        pcl::VoxelGrid<PointT>::Ptr mpVoxel;
-        std::mutex mmLoadKFMutex;
-        PointCloud::Ptr mpGlobalMap;
-        int mKeyFrameSize;
-    };
-}
 #endif // ORB_SLAM3_POINTCLOUDMAPPER_H

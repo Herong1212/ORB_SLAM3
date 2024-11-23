@@ -167,7 +167,7 @@ namespace ORB_SLAM3
         {
             return mbHasVelocity;
         }
-        
+
         // todo--Yolo
         vector<cv::Rect2i> mvDynamicArea;
 
@@ -231,14 +231,15 @@ namespace ORB_SLAM3
         // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
         // In the stereo case, mvKeysUn is redundant as images must be rectified.
         // In the RGB-D case, RGB images can be distorted.
-        std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
-        std::vector<cv::KeyPoint> mvKeysUn;
+        std::vector<cv::KeyPoint> mvKeys;      // ps：图像中提取的【未校正】的关键点，可能包括畸变。如果图像已经经过校正，则 mvKeys 和 mvKeysUn 是相同的。
+        std::vector<cv::KeyPoint> mvKeysRight; // ps：（在双目模式中）存储右图像中对应的【未校正】的关键点，便于进行立体匹配。
+        std::vector<cv::KeyPoint> mvKeysUn;    // ps：当前帧中，校正 mvKeys 后的关键点，注意是【校正后】！！！对于双目摄像头，一般得到的图像都是校正好的，再校正一次有点多余。
 
-        // Corresponding stereo coordinate and depth for each keypoint.
+        /// 每个特征点对应的 MapPoint。如果特征点没有对应的地图点，那么将存储一个【空指针】
         std::vector<MapPoint *> mvpMapPoints;
         // "Monocular" keypoints have a negative value.
-        std::vector<float> mvuRight;
-        std::vector<float> mvDepth;
+        std::vector<float> mvuRight; // ps：u-指代横坐标，因为最后这个坐标是通过各种拟合方法逼近出来的，所以使用 float 存储。
+        std::vector<float> mvDepth;  // ps：（在 RGB-D 模式中）存储与 mvKeysUn 中每个关键点对应的深度信息。
 
         // Bag of Words Vector structures.
         DBoW2::BowVector mBowVec;

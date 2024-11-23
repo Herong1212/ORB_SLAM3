@@ -283,6 +283,7 @@ namespace ORB_SLAM3
     void Map::SetInertialSensor()
     {
         unique_lock<mutex> lock(mMutexMap);
+        
         mbIsInertial = true;
     }
 

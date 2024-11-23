@@ -142,12 +142,14 @@ namespace ORB_SLAM3
         int mSensor;
 
         // Current Frame
-        Frame mCurrentFrame;
+        Frame mCurrentFrame; /// 追踪线程中有一个当前帧
         Frame mLastFrame;
 
+        ///> 还有当前帧的灰度图像 // ? 提问？那么在双目输入和在 RGBD 输入的时候呢?
+        ///>                       答：在双目输入和在 RGBD 输入时，为左侧图像的灰度图。
         cv::Mat mImGray;
 
-        // todo 
+        // todo
         cv::Mat mImColor;
         cv::Mat mDepth;
 

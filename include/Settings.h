@@ -83,8 +83,14 @@ namespace ORB_SLAM3
         cv::Size newImSize() { return newImSize_; }
         float fps() { return fps_; }
         bool rgb() { return bRGB_; }
-        bool needToResize() { return bNeedToResize1_; }
-        bool needToRectify() { return bNeedToRectify_; }
+        bool needToResize() // 表示是否需要调整图像分辨率
+        {
+            return bNeedToResize1_;
+        }
+        bool needToRectify() // 表示是否需要校正图像的畸变
+        {
+            return bNeedToRectify_;
+        }
 
         float noiseGyro() { return noiseGyro_; }
         float noiseAcc() { return noiseAcc_; }
@@ -182,13 +188,13 @@ namespace ORB_SLAM3
 
         Sophus::SE3f Tlr_;
         float thDepth_;
-        float bf_, b_;
+        float bf_, b_; // b_ --- 基线
 
         /*
          * Rectification stuff
          */
-        cv::Mat M1l_, M2l_;
-        cv::Mat M1r_, M2r_;
+        cv::Mat M1l_, M2l_; // 左相机的校正映射
+        cv::Mat M1r_, M2r_; // 右相机的校正映射
 
         /*
          * Inertial stuff
@@ -196,7 +202,7 @@ namespace ORB_SLAM3
         float noiseGyro_, noiseAcc_;
         float gyroWalk_, accWalk_;
         float imuFrequency_;
-        Sophus::SE3f Tbc_;
+        Sophus::SE3f Tbc_; // Tbc_ 表示从相机到 IMU 的变换
         bool insertKFsWhenLost_;
 
         /*

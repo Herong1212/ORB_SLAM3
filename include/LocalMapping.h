@@ -107,8 +107,8 @@ namespace ORB_SLAM3
         bool mbWriteStats;
 
         // not consider far points (clouds)
-        bool mbFarPoints;
-        float mThFarPoints;
+        bool mbFarPoints; 
+        float mThFarPoints;// 存储深度阈值，单位通常为米（m）
 
 #ifdef REGISTER_TIMES
         vector<double> vdKFInsert_ms;

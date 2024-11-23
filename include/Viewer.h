@@ -66,7 +66,10 @@ namespace ORB_SLAM3
 
         // todo--Yolo
         std::vector<cv::Rect2i> mvPersonArea;
-        map<string, vector<cv::Rect2i>> mmDetectMap;
+        // * 存储目标检测的结果：
+        // first---表示检测到的类别名称（如 "person"、"car"）；second---是一个 std::vector，存储该类别对应的所有检测区域（cv::Rect）
+        // cv::Revt ：OpenCV 定义的矩形框类型，包含四个整数值（x、y、width、height），表示矩形框的位置和大小
+        std::map<std::string, std::vector<cv::Rect2i>> mmDetectMap; 
         std::mutex mMutexPAFinsh;
 
     private:
