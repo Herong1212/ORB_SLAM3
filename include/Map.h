@@ -171,7 +171,7 @@ namespace ORB_SLAM3
 
         std::vector<MapPoint *> mvpReferenceMapPoints;
 
-        bool mbImuInitialized;
+        bool mbImuInitialized; // 是否完成 IMU 【第一阶段】初始化的标志位
 
         int mnMapChange;
         int mnMapChangeNotified;
@@ -190,7 +190,7 @@ namespace ORB_SLAM3
         bool mHasTumbnail;
         bool mbBad = false;
 
-        bool mbIsInertial;
+        bool mbIsInertial; // 是否是 IMU 模式的标志位
         bool mbIMU_BA1;
         bool mbIMU_BA2;
 

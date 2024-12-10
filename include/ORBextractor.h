@@ -92,7 +92,7 @@ namespace ORB_SLAM3
 
         std::vector<cv::Mat> mvImagePyramid;
 
-        // todo -- yolo
+        // TODO 一个存储动态物体区域的容器
         std::vector<cv::Rect2i> mvDynamicArea;
 
     protected:

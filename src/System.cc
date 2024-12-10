@@ -66,17 +66,17 @@ namespace ORB_SLAM3
         cout << "Input sensor was set to: ";
 
         if (mSensor == MONOCULAR)
-            cout << "Monocular" << endl; // 单目
+            cout << "Monocular" << endl;
         else if (mSensor == STEREO)
-            cout << "Stereo" << endl; // 双目
+            cout << "Stereo" << endl;
         else if (mSensor == RGBD)
-            cout << "RGB-D" << endl; // RGBD相机
+            cout << "RGB-D" << endl;
         else if (mSensor == IMU_MONOCULAR)
-            cout << "Monocular-Inertial" << endl; // 单目 + imu
+            cout << "Monocular-Inertial" << endl;
         else if (mSensor == IMU_STEREO)
-            cout << "Stereo-Inertial" << endl; // 双目 + imu
+            cout << "Stereo-Inertial" << endl;
         else if (mSensor == IMU_RGBD)
-            cout << "RGB-D-Inertial" << endl; // RGBD相机 + imu
+            cout << "RGB-D-Inertial" << endl;
 
         //  Step 2 读取配置文件（Check settings file）
         cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
@@ -104,6 +104,7 @@ namespace ORB_SLAM3
             // ps：这里是为了输出配置文件的相关参数，方便调试或检查设置。
             cout << (*settings_) << endl;
         }
+
         // case2：配置文件不是 1.0 版本，大多都是 1.0 版本的，所以这个略过即可。
         else
         {
@@ -218,7 +219,7 @@ namespace ORB_SLAM3
         if (mSensor == IMU_STEREO || mSensor == IMU_MONOCULAR || mSensor == IMU_RGBD)
         {
             mpAtlas->SetInertialSensor();
-            std::cout << "Inertial sensor support enabled in Atlas." << std::endl; // 调试用
+            // std::cout << "Inertial sensor support enabled in Atlas." << std::endl; // 调试用
         }
         // 扩展：如果未来需要支持更多类型的 IMU 或传感器，可以将条件判断改为更灵活的结构。例如，定义一个通用的标志位：
         // bool isInertialSensor = (mSensor == IMU_STEREO || mSensor == IMU_MONOCULAR || mSensor == IMU_RGBD);
@@ -250,11 +251,10 @@ namespace ORB_SLAM3
         // TODO Yolo 句柄
         mpTracker->SetDetector(mpDetector);
 
-        // TODO 点云
-        mpPointCloudMapper = new PointCloudMapper();
-        mpTracker->mpPointCloudMapper = mpPointCloudMapper; // 如果启用，这一步将 YOLO 检测器与跟踪线程关联，使其支持目标检测与跟踪任务
-        //  TODO 创建并启动点云处理线程
-        mptPointCloudMapping = new thread(&PointCloudMapper::Run, mpTracker->mpPointCloudMapper); // 将点云处理器 mpPointCloudMapper 关联到跟踪线程 mpTracker，便于跟踪模块调用点云相关功能
+        // TODO 点云，创建并启动点云处理线程
+        // mpPointCloudMapper = new PointCloudMapper();
+        // mpTracker->mpPointCloudMapper = mpPointCloudMapper; // 如果启用，这一步将 YOLO 检测器与跟踪线程关联，使其支持目标检测与跟踪任务
+        // mptPointCloudMapping = new thread(&PointCloudMapper::Run, mpTracker->mpPointCloudMapper); // 将点云处理器 mpPointCloudMapper 关联到跟踪线程 mpTracker，便于跟踪模块调用点云相关功能
 
         // ps2：创建并启动局部建图线程（Local Mapping）
         mpLocalMapper = new LocalMapping(this,                                                                     // 当前 SLAM 系统实例
@@ -297,7 +297,7 @@ namespace ORB_SLAM3
         }
 
         // ps3：创建并启动回环检测线程（Loop Closing）
-        // mSensor != MONOCULAR && mSensor != IMU_MONOCULAR
+        //   mSensor != MONOCULAR && mSensor != IMU_MONOCULAR
         mpLoopCloser = new LoopClosing(mpAtlas,              // 地图管理模块
                                        mpKeyFrameDatabase,   // 关键帧数据库，用于高效回环检测
                                        mpVocabulary,         // 词汇表，用于回环检测中的关键帧相似性计算
@@ -673,6 +673,7 @@ namespace ORB_SLAM3
 
     // -----------------------------------------------------------------------------------
 
+    // 当按下 Ctrl + C 停止系统时，主线程会触发系统关闭逻辑
     void System::Shutdown()
     {
         {

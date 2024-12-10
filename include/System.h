@@ -40,7 +40,7 @@
 
 // todo👇
 #include "YoloDetect.h"
-#include "PointCloudMapper.h"
+// #include "PointCloudMapper.h"
 
 namespace ORB_SLAM3
 {
@@ -232,7 +232,7 @@ namespace ORB_SLAM3
         MapDrawer *mpMapDrawer;
         
         // todo 点云定义
-        PointCloudMapper *mpPointCloudMapper;
+        // PointCloudMapper *mpPointCloudMapper;
 
         // ps：System threads: Local Mapping, Loop Closing, Viewer and PointCloud Mapping.
         // The Tracking thread "lives" in the main execution thread that creates the System object.

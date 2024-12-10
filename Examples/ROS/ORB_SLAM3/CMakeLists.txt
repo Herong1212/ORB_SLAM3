@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.10)
 project(orb_slam3_ros)
 
 message("")
@@ -6,7 +6,6 @@ message("----------------------初始化完成！-------------------------------
 
 set(ROS_BUILD_TYPE Release)
 # set(ROS_BUILD_TYPE Debug)
-
 message("ROS_BUILD_TYPE: " ${ROS_BUILD_TYPE})
 message("")
 
@@ -17,9 +16,9 @@ message("")
 
 # CMake 会自动检测编译器是否支持 C++11 或者 C++0x（这是 C++11 的一个早期版本标志，有些旧编译器使用它来表示 C++11）
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+check_cxx_compiler_flag("-std=c++17" COMPILER_SUPPORTS_CXX17)
+check_cxx_compiler_flag("-std=c++11" COMPILER_SUPPORTS_CXX11)
+check_cxx_compiler_flag("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 
 if(COMPILER_SUPPORTS_CXX17)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
@@ -40,9 +39,10 @@ endif()
 message("")
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/../../../cmake_modules)
+set(CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/../../../Thirdparty/libtorch)
 
 # 2.5.1
-set(CMAKE_PREFIX_PATH "/usr/local/lib/libtorch")
+set(CMAKE_PREFIX_PATH  "/opt/ros/noetic" ${CMAKE_PREFIX_PATH})
 find_package(Torch REQUIRED)
 message("")
 message("Torch VERSION:" ${Torch_VERSION})
@@ -82,11 +82,6 @@ message("")
 
 # 1.0.0
 find_package(PCL REQUIRED)
-
-# 1.22.0，但是不是用的这个版本，是 Thirdparty 里的三方库
-# find_package(Sophus REQUIRED)
-# message("Sophus Version: " ${Sophus_VERSION})
-message("---------------------------------------------------------")
 
 # /home/dsg/orbslam3_ghr/src/ORB_SLAM3/Examples/ROS/ORB_SLAM3
 message("PROJECT_SOURCE_DIR: " ${PROJECT_SOURCE_DIR})

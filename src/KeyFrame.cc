@@ -40,6 +40,7 @@ namespace ORB_SLAM3
     {
     }
 
+    // 关键帧构造函数
     KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB) : bImu(pMap->isImuInitialized()), mnFrameId(F.mnId), mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
                                                                        mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
                                                                        mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0), mnBALocalForMerge(0),
@@ -60,6 +61,7 @@ namespace ORB_SLAM3
     {
         mnId = nNextId++;
 
+        // 根据指定的普通帧, 初始化用于加速匹配的网格对象信息; 其实就把每个网格中有的特征点的索引复制过来
         mGrid.resize(mnGridCols);
         if (F.Nleft != -1)
             mGridRight.resize(mnGridCols);
@@ -227,30 +229,39 @@ namespace ORB_SLAM3
         mvOrderedWeights = vector<int>(lWs.begin(), lWs.end());
     }
 
+    // 1、获取与该关键帧相连（> 15个共视地图点）的所有关键帧【没有排序的】
     set<KeyFrame *> KeyFrame::GetConnectedKeyFrames()
     {
         unique_lock<mutex> lock(mMutexConnections);
-        set<KeyFrame *> s;
+
+        set<KeyFrame *> s; // 存储与当前关键帧相连接的所有关键帧，set 是一个有序容器，其中的元素会按照默认的比较方式（指针地址比较）自动排序，且不允许重复元素。
+
         for (map<KeyFrame *, int>::iterator mit = mConnectedKeyFrameWeights.begin(); mit != mConnectedKeyFrameWeights.end(); mit++)
             s.insert(mit->first);
+
         return s;
     }
 
+    // 2、得到与该关键帧连接的关键帧【已按权值排序】
     vector<KeyFrame *> KeyFrame::GetVectorCovisibleKeyFrames()
     {
         unique_lock<mutex> lock(mMutexConnections);
         return mvpOrderedConnectedKeyFrames;
     }
 
+    // 3、获取与该关键帧共视程度最高的前 N 个关键帧【已按权值排序】
     vector<KeyFrame *> KeyFrame::GetBestCovisibilityKeyFrames(const int &N)
     {
         unique_lock<mutex> lock(mMutexConnections);
+
+        // 如果不够达到的数目，就直接把现在所有的关键帧都返回了
         if ((int)mvpOrderedConnectedKeyFrames.size() < N)
             return mvpOrderedConnectedKeyFrames;
         else
             return vector<KeyFrame *>(mvpOrderedConnectedKeyFrames.begin(), mvpOrderedConnectedKeyFrames.begin() + N);
     }
 
+    // 4、得到与该关键帧连接的权重大于等于 w 的关键帧
     vector<KeyFrame *> KeyFrame::GetCovisiblesByWeight(const int &w)
     {
         unique_lock<mutex> lock(mMutexConnections);
@@ -273,6 +284,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 得到该关键帧与 pKF 的权重
     int KeyFrame::GetWeight(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexConnections);
@@ -295,9 +307,11 @@ namespace ORB_SLAM3
         return numberMPs;
     }
 
+    // TODO 将一个地图点 MapPoint 添加到关键帧 KeyFrame 中的 mvpMapPoints 列表中
     void KeyFrame::AddMapPoint(MapPoint *pMP, const size_t &idx)
     {
         unique_lock<mutex> lock(mMutexFeatures);
+
         mvpMapPoints[idx] = pMP;
     }
 
@@ -364,6 +378,7 @@ namespace ORB_SLAM3
         return nPoints;
     }
 
+    // 获取当前关键帧的具体的地图点
     vector<MapPoint *> KeyFrame::GetMapPointMatches()
     {
         unique_lock<mutex> lock(mMutexFeatures);
@@ -495,12 +510,14 @@ namespace ORB_SLAM3
         pKF->AddChild(this);
     }
 
+    // 获取当前关键帧的子关键帧
     set<KeyFrame *> KeyFrame::GetChilds()
     {
         unique_lock<mutex> lockCon(mMutexConnections);
         return mspChildrens;
     }
 
+    // 获取当前关键帧的父关键帧
     KeyFrame *KeyFrame::GetParent()
     {
         unique_lock<mutex> lockCon(mMutexConnections);
@@ -748,11 +765,15 @@ namespace ORB_SLAM3
         return (x >= mnMinX && x < mnMaxX && y >= mnMinY && y < mnMaxY);
     }
 
-    bool KeyFrame::UnprojectStereo(int i, Eigen::Vector3f &x3D)
+    // 在双目和RGBD情况下将特征点反投影到空间中得到世界坐标系下三维点
+    bool KeyFrame::UnprojectStereo(int i,                // 第i个特征点
+                                   Eigen::Vector3f &x3D) // 得到的世界坐标系下的三维点
     {
         const float z = mvDepth[i];
         if (z > 0)
         {
+            // 由2维图像反投影到相机坐标系
+            // 双目中 mvDepth 是在 ComputeStereoMatches() 函数中求取的；rgbd 中是直接测量的
             const float u = mvKeys[i].pt.x;
             const float v = mvKeys[i].pt.y;
             const float x = (u - cx) * z * invfx;
@@ -823,9 +844,11 @@ namespace ORB_SLAM3
         return Eigen::Vector3f(mImuBias.bax, mImuBias.bay, mImuBias.baz);
     }
 
+    // 获取 IMU 的偏置，IMU 的偏置通常是指 IMU 的加速度计和陀螺仪的偏移量，它们可能在一段时间内不变。
     IMU::Bias KeyFrame::GetImuBias()
     {
         unique_lock<mutex> lock(mMutexPose);
+
         return mImuBias;
     }
 

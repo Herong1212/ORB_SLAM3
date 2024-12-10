@@ -33,9 +33,9 @@ cd ../../../
 echo
 echo "-------------------------------- 4、Uncompress vocabulary ... -----------------------------------------"
 
-# cd Vocabulary
-# tar -xf ORBvoc.txt.tar.gz
-# cd ..
+cd Vocabulary
+tar -xf ORBvoc.txt.tar.gz
+cd ..
 
 echo
 echo "----------------- Boss: Configuring and building ORB_SLAM3 ... -----------------------------------------"

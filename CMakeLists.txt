@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20) # 原本是 3.4，最高到 3.17 了，再新就不兼容了！
+cmake_minimum_required(VERSION 3.15) # 原本是 3.4，最高到 3.17 了，再新就不兼容了！
 project(ORB_SLAM3)
 
 # 从 CMake 3.12 开始，处理CUDA和CUDA架构的方式发生了变化，特别是当使用find_package(Torch)时，CMake会要求指定CUDA_ARCHITECTURES，以确保编译能够生成针对你硬件的代码。
@@ -10,27 +10,18 @@ set(CMAKE_BUILD_TYPE Release) # 在这儿修改为 Debug 好像不太管用
 message(STATUS "Build type: " ${CMAKE_BUILD_TYPE})
 message("")
 
-# 新增定义👇
-# if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-#     add_definitions(-DREGISTER_TIMES)
-# endif()
-
-# C 编译选项（把 -Wall 删了）
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
-# C++ 编译选项（把 -Wall 删了）
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-# C 和 C++ 的发布模式编译选项，进一步优化本地性能
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
 # CMake 会自动检测编译器是否支持 C++11 或者 C++0x（这是 C++11 的一个早期版本标志，有些旧编译器使用它来表示 C++11）
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+check_cxx_compiler_flag("-std=c++17" COMPILER_SUPPORTS_CXX17)
+check_cxx_compiler_flag("-std=c++11" COMPILER_SUPPORTS_CXX11)
+check_cxx_compiler_flag("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 
 if(COMPILER_SUPPORTS_CXX17)
-    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
     add_definitions(-DCOMPILEDWITHC17)
     message(STATUS "Using flag -std=c++17.")
@@ -50,12 +41,11 @@ endif()
 add_definitions(-w)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
-
+# set(CMAKE_PREFIX_PATH "/usr/local/lib/libtorch")
+set(CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/Thirdparty/libtorch)
 message(STATUS "CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
 message("")
 
-# set(CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/Thirdparty/libtorch)
-set(CMAKE_PREFIX_PATH "/usr/local/lib/libtorch")
 find_package(Torch REQUIRED)
 message("")
 message("Torch VERSION:" ${Torch_VERSION})
@@ -128,7 +118,7 @@ add_library(${PROJECT_NAME} SHARED
     src/TwoViewReconstruction.cc
     src/Config.cc
     src/Settings.cc
-    src/PointCloudMapper.cpp
+    # src/PointCloudMapper.cpp
     src/YoloDetect.cpp
     include/System.h
     include/Tracking.h
@@ -160,8 +150,9 @@ add_library(${PROJECT_NAME} SHARED
     include/SerializationUtils.h
     include/Config.h
     include/Settings.h
-    include/PointCloudMapper.h
-    include/YoloDetect.h)
+    # include/PointCloudMapper.h
+    include/YoloDetect.h
+)
 
 add_subdirectory(Thirdparty/g2o)
 
@@ -171,10 +162,10 @@ target_link_libraries(${PROJECT_NAME}
     ${Pangolin_LIBRARIES}
     ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
     ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.so
-    -lboost_serialization
-    -lcrypto
     ${PCL_LIBRARIES}
     ${TORCH_LIBRARIES}
+    -lboost_serialization
+    -lcrypto
 )
 
 # If RealSense SDK is found the library is added and its examples compiled
@@ -190,7 +181,7 @@ endif()
 
 #---------------------------------------------------------------------------------- Build examples ------------------------------------------------------------------------------------------------
 
-# # 1、RGB-D examples
+# 1、RGB-D examples
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/RGB-D)
 
 # add_executable(rgbd_tum Examples/RGB-D/rgbd_tum.cc)

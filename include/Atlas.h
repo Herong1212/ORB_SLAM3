@@ -139,16 +139,16 @@ namespace ORB_SLAM3
         long unsigned int GetNumLivedMP();
 
     protected:
-        std::set<Map *> mspMaps;
+        std::set<Map *> mspMaps; // 地图集
         std::set<Map *> mspBadMaps;
         // Its necessary change the container from set to vector because libboost 1.58 and Ubuntu 16.04 have an error with this cointainer
         std::vector<Map *> mvpBackupMaps;
 
-        Map *mpCurrentMap;
+        Map *mpCurrentMap; // 当前的活跃地图
 
         std::vector<GeometricCamera *> mvpCameras;
 
-        unsigned long int mnLastInitKFidMap;
+        unsigned long int mnLastInitKFidMap; // 记录当前地图创建时的第一个关键帧的 ID
 
         Viewer *mpViewer;
         bool mHasViewer;

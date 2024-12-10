@@ -56,26 +56,40 @@ namespace ORB_SLAM3
         }
     }
 
+    // notice 作用：在地图集中创建新地图，如果当前活跃地图有效，先存储当前地图为非活跃地图，然后新建地图；否则，可以直接新建地图。
     void Atlas::CreateNewMap()
     {
+        // 锁住地图集
         unique_lock<mutex> lock(mMutexAtlas);
+
+        // 输出马上要新建的地图的 ID
         cout << "Creation of new map with id: " << Map::nNextId << endl;
+
+        // 如果当前有活跃地图，先存储当前地图为非活跃地图，并准备创建新地图
+        // 如果是第一次启动，系统没有活跃地图，则 mpCurrentMap = nullptr
         if (mpCurrentMap)
         {
+            // mnLastInitKFidMap 为当前地图创建时第 1 个关键帧的 id，它是在上一个地图最大关键帧 id 的基础上增加 1
             if (!mspMaps.empty() && mnLastInitKFidMap < mpCurrentMap->GetMaxKFid())
+            {
+                // mnLastInitKFidMap 会基于当前活跃地图的最大关键帧 ID 进行更新，确保新的地图从正确的关键帧 ID 开始
                 mnLastInitKFidMap = mpCurrentMap->GetMaxKFid() + 1; // The init KF is the next of current maximum
+            }
 
+            // 将当前地图储存起来，其实并不是真正意义上的“存储”，只是把 mIsInUse 标记为 false，也就是将其设置为【非活跃地图】。此时，这个非活跃地图仍在地图集中。
             mpCurrentMap->SetStoredMap();
+
             cout << "Stored map with ID: " << mpCurrentMap->GetId() << endl;
 
             // if(mHasViewer)
             //     mpViewer->AddMapToCreateThumbnail(mpCurrentMap);
         }
+
         cout << "Creation of new map with last KF id: " << mnLastInitKFidMap << endl;
 
-        mpCurrentMap = new Map(mnLastInitKFidMap);
-        mpCurrentMap->SetCurrentMap();
-        mspMaps.insert(mpCurrentMap);
+        mpCurrentMap = new Map(mnLastInitKFidMap); // 新建地图
+        mpCurrentMap->SetCurrentMap();             // 设置为【活跃地图】，就是把 mIsInUse 标记为 true
+        mspMaps.insert(mpCurrentMap);              // 插入地图集
     }
 
     void Atlas::ChangeMap(Map *pMap)
@@ -109,9 +123,12 @@ namespace ORB_SLAM3
         pMapKF->AddKeyFrame(pKF);
     }
 
+    // TODO 将一个地图点 MapPoint 添加到当前活动地图（Map）的地图点列表中
     void Atlas::AddMapPoint(MapPoint *pMP)
     {
+        // 获取这个地图点所属的地图对象
         Map *pMapMP = pMP->GetMap();
+        // 将地图点插入该地图的全局地图点容器
         pMapMP->AddMapPoint(pMP);
     }
 
@@ -215,6 +232,7 @@ namespace ORB_SLAM3
     vector<Map *> Atlas::GetAllMaps()
     {
         unique_lock<mutex> lock(mMutexAtlas);
+
         struct compFunctor
         {
             inline bool operator()(Map *elem1, Map *elem2)
@@ -222,6 +240,7 @@ namespace ORB_SLAM3
                 return elem1->GetId() < elem2->GetId();
             }
         };
+
         vector<Map *> vMaps(mspMaps.begin(), mspMaps.end());
         sort(vMaps.begin(), vMaps.end(), compFunctor());
         return vMaps;
@@ -252,12 +271,17 @@ namespace ORB_SLAM3
         mnLastInitKFidMap = 0;
     }
 
+    // 获取当前活跃的地图（即正在使用的地图）
     Map *Atlas::GetCurrentMap()
     {
         unique_lock<mutex> lock(mMutexAtlas);
+
+        // 如果当前没有活动地图，创建一个新的地图
         if (!mpCurrentMap)
             CreateNewMap();
+
         while (mpCurrentMap->IsBad())
+            // 如果当前地图是坏的，系统会等待 3 毫秒后再次检查。这相当于一个等待机制，直到地图变成好的状态。usleep 是一个会让线程休眠的函数，在这里每次休眠 3 毫秒，之后会再次检查地图是否修复好。
             usleep(3000);
 
         return mpCurrentMap;
@@ -284,13 +308,14 @@ namespace ORB_SLAM3
     bool Atlas::isInertial()
     {
         unique_lock<mutex> lock(mMutexAtlas);
+
         return mpCurrentMap->IsInertial();
     }
 
     void Atlas::SetInertialSensor()
     {
         unique_lock<mutex> lock(mMutexAtlas);
-        
+
         mpCurrentMap->SetInertialSensor();
     }
 
@@ -303,6 +328,7 @@ namespace ORB_SLAM3
     bool Atlas::isImuInitialized()
     {
         unique_lock<mutex> lock(mMutexAtlas);
+
         return mpCurrentMap->isImuInitialized();
     }
 

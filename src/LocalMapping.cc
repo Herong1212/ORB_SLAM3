@@ -83,23 +83,29 @@ namespace ORB_SLAM3
         mpTracker = pTracker;
     }
 
-    // NOTE：线程主函数，大 Boss， 非常重要的！！！
+    // note：线程主函数，大 Boss， 非常重要的！！！
     void LocalMapping::Run()
     {
+        std::cout << "[LocalMapping] Thread started." << std::endl;
+
         // 标记状态，表示当前 run 函数正在运行，尚未结束
         mbFinished = false;
 
+        // 线程持续运行，直到检测到 CheckFinish() 返回 true 时退出
         while (1)
         {
-            // Tracking will see that Local Mapping is busy
             // Step 1 告诉 Tracking，LocalMapping 正处于繁忙状态，请不要给我发送关键帧打扰我
-            // LocalMapping 线程处理的关键帧都是 Tracking 线程发过来的
-            // notice1 要进行局部建图过程了，所以先不接收来自【跟踪线程】的关键帧了，等下面一系列过程处理完再接收；
-            SetAcceptKeyFrames(false);
+            // LocalMapping 线程处理的关键帧都是 Tracking 线程发过来的，Tracking 线程发出关键帧后，等待局部建图处理完成，再发下一帧
+            // ? 是一帧一帧处理吗？答：
+            SetAcceptKeyFrames(false); // notice1 要进行局部建图过程了，所以先不接收来自【跟踪线程】的关键帧了，等下面一系列过程处理完再接收；
 
             // 等待处理的关键帧列表不为空 并且 imu 正常 --- 即队列里有已经存在的关键帧，就需要先处理完已经存在的，再去接收新的
             if (CheckNewKeyFrames() && !mbBadImu) // todo 检查有没有关键帧，如果有的话，并且 IMU 正常，则开始依次执行下面的代码
             {
+                // ? 队列中最多存放多少个关键帧？答：一般只维持在 1~2 帧左右，，若积压则可能影响跟踪性能
+                // 如果 Tracking 插入关键帧的速度超过局部建图的处理速度（例如在快速运动或特征点变化剧烈的场景下），队列可能会积压更多关键帧。
+                std::cout << "此时等待处理的队列中的关键帧数量：" << mlNewKeyFrames.size() << std::endl;
+
 #ifdef REGISTER_TIMES
                 double timeLBA_ms = 0;
                 double timeKFCulling_ms = 0;
@@ -107,7 +113,13 @@ namespace ORB_SLAM3
                 std::chrono::steady_clock::time_point time_StartProcessKF = std::chrono::steady_clock::now();
 #endif
                 // Step 2 处理列表中的关键帧，包括计算 BoW、更新观测、描述子、共视图，插入到地图等
+                std::cout << "[LocalMapping] Step 2: Processing new keyframe." << std::endl;
+                auto start = std::chrono::steady_clock::now();
                 ProcessNewKeyFrame();
+                auto end = std::chrono::steady_clock::now();
+                double duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+                std::cout << "[LocalMapping] ProcessNewKeyFrame took: " << duration << " ms" << std::endl;
+
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndProcessKF = std::chrono::steady_clock::now();
 
@@ -116,7 +128,9 @@ namespace ORB_SLAM3
 #endif
 
                 // Step 3 根据地图点的观测情况剔除【质量不好】的地图点
+                std::cout << "[LocalMapping] Step 3: Removing bad map points." << std::endl;
                 MapPointCulling();
+
 #ifdef REGISTER_TIMES
                 std::chrono::steady_clock::time_point time_EndMPCulling = std::chrono::steady_clock::now();
 
@@ -125,19 +139,20 @@ namespace ORB_SLAM3
 #endif
 
                 // Step 4 当前关键帧与相邻关键帧通过【三角化】产生新的地图点，使得跟踪更稳
+                std::cout << "[LocalMapping] Step 4: Creating new map points." << std::endl;
                 CreateNewMapPoints();
 
                 // todo：注意 orbslam2 中放在了函数 SearchInNeighbors（用到了 mbAbortBA ）后面，应该放这里更合适
                 mbAbortBA = false;
 
+                // Step 5 检查并融合当前关键帧与相邻关键帧帧（两级相邻）中重复的地图点
+                // 先完成相邻关键帧与当前关键帧的地图点的融合（在相邻关键帧中查找当前关键帧的地图点），
+                // 再完成当前关键帧与相邻关键帧的地图点的融合（在当前关键帧中查找当前相邻关键帧的地图点）
+                // 目的：在当前关键帧及其相邻的关键帧中寻找更多的匹配，并融合重复的地图点。
                 // 已经处理完队列中的最后的一个关键帧（即都处理完之后），没有新的关键帧要进来了，就执行融合
                 if (!CheckNewKeyFrames())
                 {
-                    // Step 5 检查并融合当前关键帧与相邻关键帧帧（两级相邻）中重复的地图点
-                    // Find more matches in neighbor keyframes and fuse point duplications
-                    // 先完成相邻关键帧与当前关键帧的地图点的融合（在相邻关键帧中查找当前关键帧的地图点），
-                    // 再完成当前关键帧与相邻关键帧的地图点的融合（在当前关键帧中查找当前相邻关键帧的地图点）
-                    // 目的：在当前关键帧及其相邻的关键帧中寻找更多的匹配，并融合重复的地图点。
+                    std::cout << "[LocalMapping] Step 5: Searching and fusing neighbors." << std::endl;
                     SearchInNeighbors(); // 搜索邻域匹配，检查并融合当前关键帧与相邻帧（两级相邻）重复的地图点
                 }
 
@@ -148,48 +163,66 @@ namespace ORB_SLAM3
                 vdMPCreation_ms.push_back(timeMPCreation);
 #endif
 
-                bool b_doneLBA = false;
-                int num_FixedKF_BA = 0;
-                int num_OptKF_BA = 0;
-                int num_MPs_BA = 0;
-                int num_edges_BA = 0;
+                bool b_doneLBA = false; // 标记是否执行了局部 BA
+                int num_FixedKF_BA = 0; // 参与优化的固定关键帧数量
+                int num_OptKF_BA = 0;   // 参与优化的可调整关键帧数量
+                int num_MPs_BA = 0;     // 参与优化的地图点数量
+                int num_edges_BA = 0;   // 优化中生成的边的数量
 
-                // notice：这里不同于 ORB-SLAM2 的方式
                 // 已经处理完队列中的最后的一个关键帧，并且闭环检测没有请求停止 LocalMapping 线程
                 if (!CheckNewKeyFrames() && !stopRequested())
                 {
+                    // Step 6 当局部地图中的关键帧【大于2个】的时候，才可能存在共视关系，才有必要来进行局部地图的 BA
+                    std::cout << "局部地图中关键帧数量: " << mpAtlas->KeyFramesInMap() << std::endl;
+                    // 也即局部建图线程中的关键帧大于 2 个时才会执行局部 BA 过程，因为局部 BA 过程挺费时间的，所以保证它不要太过频繁
                     if (mpAtlas->KeyFramesInMap() > 2)
                     {
-
+                        // Step 6.1 处于 IMU 模式，且当前关键帧所在的地图已经完成 IMU 第一阶段初始化
                         if (mbInertial && mpCurrentKeyFrame->GetMap()->isImuInitialized())
                         {
+                            // 计算上一关键帧到当前关键帧相机光心的距离 + 上上关键帧到上一关键帧相机光心的距离
                             float dist = (mpCurrentKeyFrame->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->GetCameraCenter()).norm() +
                                          (mpCurrentKeyFrame->mPrevKF->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->mPrevKF->GetCameraCenter()).norm();
 
+                            // 如果距离大于 5 厘米，记录当前 KF 和上一 KF 时间戳的差，累加到 mTinit
                             if (dist > 0.05)
                                 mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
+
+                            // 当前关键帧所在的地图尚未完成 IMU BA2（ IMU 第三阶段初始化 ）
                             if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
+                                // 如果【累计时间小于10s】 并且 【距离小于2厘米】，认为运动幅度太小，不足以初始化 IMU，将 mbBadImu 设置为 true
                                 if ((mTinit < 10.f) && (dist < 0.02))
                                 {
                                     cout << "Not enough motion for initializing. Reseting..." << endl;
                                     unique_lock<mutex> lock(mMutexReset);
                                     mbResetRequestedActiveMap = true;
                                     mpMapToReset = mpCurrentKeyFrame->GetMap();
-                                    mbBadImu = true;
+                                    mbBadImu = true; // 在跟踪线程里会重置当前活跃地图
                                 }
                             }
 
+                            // 判断成功跟踪匹配的点数是否足够多
+                            // 条件---------1.1、跟踪成功的内点数目大于75-----1.2、并且是单目--或--2.1、跟踪成功的内点数目大于 100-----2.2、并且不是单目
                             bool bLarge = ((mpTracker->GetMatchesInliers() > 75) && mbMonocular) || ((mpTracker->GetMatchesInliers() > 100) && !mbMonocular);
+
+                            // * 局部地图 + IMU 一起优化，优化关键帧位姿、地图点、IMU 参数
                             Optimizer::LocalInertialBA(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(), num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA, bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
                             b_doneLBA = true;
                         }
+
+                        // Step 6.2 不是 IMU 模式，或当前关键帧所在的地图还未完成 IMU 初始化
                         else
                         {
+                            // 局部地图BA，不包括 IMU 数据
+                            // 注意这里的第二个参数是按地址传递的，当这里的 mbAbortBA 状态发生变化时，能够及时执行/停止 BA
+                            // * 这就同 ORB-SLAM2 一样了，因为 IMU 不起作用了，只优化局部地图，不包括 IMU 信息。优化关键帧位姿、地图点。
+                            std::cout << "[LocalMapping] Step 6: Local Bundle Adjustment completed. " << std::endl;
                             Optimizer::LocalBundleAdjustment(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(), num_FixedKF_BA, num_OptKF_BA, num_MPs_BA, num_edges_BA);
                             b_doneLBA = true;
                         }
                     }
+
 #ifdef REGISTER_TIMES
                     std::chrono::steady_clock::time_point time_EndLBA = std::chrono::steady_clock::now();
 
@@ -211,17 +244,24 @@ namespace ORB_SLAM3
 
 #endif
 
+                    // Step 7 当前关键帧所在地图未完成 IMU 第一阶段初始化
                     // Initialize IMU here
                     if (!mpCurrentKeyFrame->GetMap()->isImuInitialized() && mbInertial)
                     {
+                        // 在函数 InitializeIMU() 里设置 IMU 成功初始化标志 SetImuInitialized
+                        // todo1：执行 IMU 第一次初始化，目的：快速初始化 IMU，尽快使用 IMU 进行跟踪
                         if (mbMonocular)
-                            InitializeIMU(1e2, 1e10, true);
+                            InitializeIMU(1e2, 1e10, true); // * 后面大多数都是用的这个函数来初始化，只是参数不一样~
                         else
                             InitializeIMU(1e2, 1e5, true);
                     }
 
-                    // Check redundant local Keyframes
+                    // Step 8 检测并剔除当前关键帧相邻的关键帧中冗余的关键帧。注意不是剔除的当前帧，而是当前关键帧的相邻关键帧！
+                    // * 冗余的判定：该关键帧的【90%】的地图点可以被其它关键帧观测到
+                    // 跟踪中关键帧插入条件比较松，交给 LocalMapping 线程的关键帧会比较密，这里再删除冗余
+                    std::cout << "[LocalMapping] Step 8: Removing redundant keyframes." << std::endl;
                     KeyFrameCulling();
+                    std::cout << "此时局部地图中关键帧数量: " << mpAtlas->KeyFramesInMap() << std::endl;
 
 #ifdef REGISTER_TIMES
                     std::chrono::steady_clock::time_point time_EndKFCulling = std::chrono::steady_clock::now();
@@ -230,12 +270,17 @@ namespace ORB_SLAM3
                     vdKFCulling_ms.push_back(timeKFCulling_ms);
 #endif
 
+                    // Step 9 如果距离 IMU 第一阶段初始化成功累计时间差【小于100s】，进行 VIBA
                     if ((mTinit < 50.0f) && mbInertial)
                     {
+                        // Step 9.1 根据条件判断是否进行 VIBA1（IMU第二次初始化）
+                        // 条件：1、当前关键帧所在的地图还未完成IMU初始化---并且--------2、正常跟踪状态----------
                         if (mpCurrentKeyFrame->GetMap()->isImuInitialized() && mpTracker->mState == Tracking::OK) // Enter here everytime local-mapping is called
                         {
+                            // 当前关键帧所在的地图还未完成 VIBA 1
                             if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA1())
                             {
+                                // todo2：如果已完成第一阶段初始化，并且累计时间差【大于 5 s】，开始 VIBA1（ IMU 第二阶段初始化 ），目的：快速修正 IMU，在短时间内使得 IMU 参数相对可靠
                                 if (mTinit > 5.0f)
                                 {
                                     cout << "start VIBA 1" << endl;
@@ -248,8 +293,12 @@ namespace ORB_SLAM3
                                     cout << "end VIBA 1" << endl;
                                 }
                             }
+
+                            // Step 9.2 根据条件判断是否进行 VIBA2（ IMU 第三次初始化）
+                            // 当前关键帧所在的地图还未完成VIBA 2
                             else if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
+                                // todo3：如果已完成第二阶段初始化，并且累计时间差【大于 15 s】，开始 VIBA2（ IMU 第三阶段初始化 ），目的：再次优化 IMU，保证 IMU 参数的高精度
                                 if (mTinit > 15.0f)
                                 {
                                     cout << "start VIBA 2" << endl;
@@ -263,6 +312,8 @@ namespace ORB_SLAM3
                                 }
                             }
 
+                            // Step 9.3 在关键帧【小于 100（源代码中是 关键帧小于 200）】时，会在满足一定时间间隔后多次进行尺度、重力方向优化
+                            // ? 讲的是每隔 10s 进行一次尺度优化；
                             // scale refinement
                             if (((mpAtlas->KeyFramesInMap()) <= 200) &&
                                 ((mTinit > 25.0f && mTinit < 25.5f) ||
@@ -272,7 +323,8 @@ namespace ORB_SLAM3
                                  (mTinit > 65.0f && mTinit < 65.5f) ||
                                  (mTinit > 75.0f && mTinit < 75.5f)))
                             {
-                                if (mbMonocular)
+                                if (mbMonocular) // 单目 + IMU
+                                    // 使用了所有关键帧，但只优化尺度和重力方向以及速度和偏执（其实就是一切跟惯性相关的量）
                                     ScaleRefinement();
                             }
                         }
@@ -283,8 +335,9 @@ namespace ORB_SLAM3
                 vdLBASync_ms.push_back(timeKFCulling_ms);
                 vdKFCullingSync_ms.push_back(timeKFCulling_ms);
 #endif
-                // Step 10 将当前帧加入到闭环检测队列中
+                // Step 10 将当前帧加入到闭环检测队列中，用于后续回环优化
                 // 注意这里的关键帧被设置成为了 bad 的情况, 这个需要注意
+                std::cout << "将当前关键帧插入到回环检测队列 mlpLoopKeyFrameQueue 中" << std::endl;
                 mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
 
 #ifdef REGISTER_TIMES
@@ -294,9 +347,12 @@ namespace ORB_SLAM3
                 vdLMTotal_ms.push_back(timeLocalMap);
 #endif
             }
+
             // 当要终止当前线程的时候
             else if (Stop() && !mbBadImu)
             {
+                std::cout << "[LocalMapping] Stop signal received, terminating thread." << std::endl;
+
                 // Safe area to stop
                 while (isStopped() && !CheckFinish())
                 {
@@ -304,6 +360,7 @@ namespace ORB_SLAM3
                     usleep(3000);
                     // std::this_thread::sleep_for(std::chrono::milliseconds(3));  ORB-SLAM2 中这样用的
                 }
+
                 // 然后确定终止了就跳出这个线程的主循环
                 if (CheckFinish())
                     break;
@@ -312,8 +369,7 @@ namespace ORB_SLAM3
             // 查看是否有复位线程的请求
             ResetIfRequested();
 
-            // notice2 OK，处理完了，现在可以开始接收来自【跟踪线程】的关键帧了
-            SetAcceptKeyFrames(true);
+            SetAcceptKeyFrames(true); // notice2 OK，处理完了，现在可以开始接收来自【跟踪线程】的关键帧了
 
             // 如果当前线程已经结束了就跳出主循环
             if (CheckFinish())
@@ -323,6 +379,7 @@ namespace ORB_SLAM3
         }
 
         // 设置线程已经终止
+        std::cout << "[LocalMapping] Thread finished." << std::endl;
         SetFinish();
     }
 
@@ -334,10 +391,11 @@ namespace ORB_SLAM3
         mbAbortBA = true;
     }
 
-    // 查看列表中是否有等待被插入的关键帧
+    // 查看列表中是否有等待被插入的关键帧。如果还有新的关键帧需要处理返回 true；如果当前关键帧队列为空，没有新的关键帧需要处理，返回 false
     bool LocalMapping::CheckNewKeyFrames()
     {
         unique_lock<mutex> lock(mMutexNewKFs);
+
         return (!mlNewKeyFrames.empty());
     }
 
@@ -390,6 +448,7 @@ namespace ORB_SLAM3
             ProcessNewKeyFrame();
     }
 
+    // 剔除不符合质量要求的地图点，例如被观测次数过少或外点
     void LocalMapping::MapPointCulling()
     {
         // Check Recent Added MapPoints
@@ -431,6 +490,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 在当前关键帧和邻近关键帧之间进行特征点的三角化，生成新的地图点
     void LocalMapping::CreateNewMapPoints()
     {
         // Retrieve neighbor keyframes in covisibility graph
@@ -476,6 +536,7 @@ namespace ORB_SLAM3
         int countStereoGoodProj = 0;
         int countStereoAttempt = 0;
         int totalStereoPts = 0;
+
         // Search matches with epipolar restriction and triangulate
         for (size_t i = 0; i < vpNeighKFs.size(); i++)
         {
@@ -761,6 +822,7 @@ namespace ORB_SLAM3
         }
     }
 
+    // 在当前关键帧和相邻关键帧之间查找重复的地图点，并将其融合
     void LocalMapping::SearchInNeighbors()
     {
         // Retrieve neighbor keyframes
@@ -930,6 +992,7 @@ namespace ORB_SLAM3
         return mbAcceptKeyFrames;
     }
 
+    // 设置"允许接受关键帧"的状态标志
     void LocalMapping::SetAcceptKeyFrames(bool flag)
     {
         unique_lock<mutex> lock(mMutexAccept);
@@ -1225,17 +1288,28 @@ namespace ORB_SLAM3
         return mbFinished;
     }
 
+    // note：imu 初始化函数，非常重要！！！
+    /**
+     * @brief imu初始化
+     * @param priorG 陀螺仪偏置的信息矩阵系数，主动设置时一般 bInit 为 true，也就是只优化最后一帧的偏置，这个数会作为计算信息矩阵时使用
+     * @param priorA 加速度计偏置的信息矩阵系数
+     * @param bFIBA  是否做 BA 优化，目前都为 true
+     */
     void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     {
+        // Step1：下面是各种不满足 IMU 初始化的条件，不满足就直接返回。
+        // case1：如果有置位请求，不进行 IMU 初始化，直接返回；
         if (mbResetRequested)
             return;
 
+        // case2：当前地图大于 10 帧时，才进行 IMU 初始化。因为刚开始一直进行的纯视觉初始化，等地图中关键帧数量大于 10 后，再进行 IMU 初始化；
+        // 从时间及帧数上限制初始化，不满足下面的不进行初始化
         float minTime;
         int nMinKF;
         if (mbMonocular)
         {
-            minTime = 2.0;
-            nMinKF = 10;
+            minTime = 2.0; // 最后一个关键帧和第一个关键帧的时间戳之差要大于该最小时间
+            nMinKF = 10;   // 地图中最至少存在的关键帧数目，所有模式都一样
         }
         else
         {
@@ -1246,7 +1320,8 @@ namespace ORB_SLAM3
         if (mpAtlas->KeyFramesInMap() < nMinKF)
             return;
 
-        // Retrieve all keyframe in temporal order
+        // case3：如果当前活跃地图中关键帧数量 ＞ 10 个，再检查是否满足头尾关键帧时间戳之差的条件，不满足直接返回；
+        // 按照【时间顺序】存放目前地图里的所有关键帧，顺序按照前后顺序来，包括当前关键帧
         list<KeyFrame *> lpKF;
         KeyFrame *pKF = mpCurrentKeyFrame;
         while (pKF->mPrevKF)
@@ -1255,15 +1330,18 @@ namespace ORB_SLAM3
             pKF = pKF->mPrevKF;
         }
         lpKF.push_front(pKF);
+
+        // 同样内容再构建一个和 lpKF 一样的 vector 容器 vpKF，上面那个是 list 容器
         vector<KeyFrame *> vpKF(lpKF.begin(), lpKF.end());
 
         if (vpKF.size() < nMinKF)
             return;
 
-        mFirstTs = vpKF.front()->mTimeStamp;
+        mFirstTs = vpKF.front()->mTimeStamp; // 获取第一个关键帧的时间戳
         if (mpCurrentKeyFrame->mTimeStamp - mFirstTs < minTime)
             return;
 
+        // Step2：该标记为 true，表示正在做 IMU 的初始化，在 tracking 里面使用，如果为 true，暂不添加关键帧（此时跟踪线程不再创建新的关键帧）
         bInitializing = true;
 
         while (CheckNewKeyFrames())
@@ -1485,6 +1563,7 @@ namespace ORB_SLAM3
         return;
     }
 
+    // ps：优化重力方向和尺度
     void LocalMapping::ScaleRefinement()
     {
         // Minimum number of keyframes to compute a solution

@@ -23,7 +23,7 @@
 namespace ORB_SLAM3
 {
 
-    long unsigned int Map::nNextId = 0;
+    long unsigned int Map::nNextId = 0; // ? 静态成员变量？通常用于给每个新创建的地图分配一个唯一的 ID
 
     Map::Map() : mnMaxKFid(0), mnBigChangeIdx(0), mbImuInitialized(false), mnMapChange(0), mpFirstRegionKF(static_cast<KeyFrame *>(NULL)),
                  mbFail(false), mIsInUse(false), mHasTumbnail(false), mbBad(false), mnMapChangeNotified(0), mbIsInertial(false), mbIMU_BA1(false), mbIMU_BA2(false)
@@ -80,18 +80,23 @@ namespace ORB_SLAM3
     void Map::AddMapPoint(MapPoint *pMP)
     {
         unique_lock<mutex> lock(mMutexMap);
+
         mspMapPoints.insert(pMP);
     }
 
+    // 设置完成 IMU 【第一阶段】初始化
     void Map::SetImuInitialized()
     {
         unique_lock<mutex> lock(mMutexMap);
         mbImuInitialized = true;
     }
 
+    // 是否完成 IMU【第一阶段】初始化
+    // 第一次初始化通常是指 IMU 数据的初步整合，目的是让 IMU 数据和视觉数据能够共同参与到后续的优化中。
     bool Map::isImuInitialized()
     {
         unique_lock<mutex> lock(mMutexMap);
+
         return mbImuInitialized;
     }
 
@@ -283,13 +288,14 @@ namespace ORB_SLAM3
     void Map::SetInertialSensor()
     {
         unique_lock<mutex> lock(mMutexMap);
-        
+
         mbIsInertial = true;
     }
 
     bool Map::IsInertial()
     {
         unique_lock<mutex> lock(mMutexMap);
+
         return mbIsInertial;
     }
 
@@ -305,15 +311,18 @@ namespace ORB_SLAM3
         mbIMU_BA2 = true;
     }
 
+    // 是否完成 IMU【第二阶段】初始化 / 表示 IMU 数据已经参与了【第一次的 BA】优化。
     bool Map::GetIniertialBA1()
     {
         unique_lock<mutex> lock(mMutexMap);
         return mbIMU_BA1;
     }
 
+    // 是否完成 IMU【第三阶段】初始化 / 表示 IMU 数据已经参与了【第二次的 BA】 优化，通常是在更精细的优化阶段，经过 更长时间的运行，系统将进行第二次 BA 优化，以进一步提高精度。
     bool Map::GetIniertialBA2()
     {
         unique_lock<mutex> lock(mMutexMap);
+
         return mbIMU_BA2;
     }
 
@@ -331,7 +340,7 @@ namespace ORB_SLAM3
         }
         return 0;
     }
-
+    // 获取当前地图的变化索引（即地图发生变化的标识符）
     int Map::GetMapChangeIndex()
     {
         unique_lock<mutex> lock(mMutexMap);
@@ -344,6 +353,7 @@ namespace ORB_SLAM3
         mnMapChange++;
     }
 
+    // 获取上次地图变化时的索引
     int Map::GetLastMapChange()
     {
         unique_lock<mutex> lock(mMutexMap);

@@ -206,15 +206,18 @@ namespace ORB_SLAM3
 
     protected:
         // Position in absolute coordinates
-        Eigen::Vector3f mWorldPos;
+        Eigen::Vector3f mWorldPos; // 地图点在世界坐标系中的位置
 
-        // Keyframes observing the point and associated index in keyframe
+        // 存储了哪个关键帧观测到了这个地图点，以及特征点的索引。
+        // first：指向观测到这个地图点的关键帧。
+        // second：一个二元组，表示在关键帧中观测到该地图点的 左图索引 和 右图索引。第一个左图索引，第二个右图索引。如果是 单目 或 RGB-D，只有一个视图，则右图索引为 -1。
         std::map<KeyFrame *, std::tuple<int, int>> mObservations;
         // For save relation without pointer, this is necessary for save/load function
         std::map<long unsigned int, int> mBackupObservationsId1;
         std::map<long unsigned int, int> mBackupObservationsId2;
 
         // Mean viewing direction
+        // 该 MapPoint 平均观测方向，用于判断点是否在可视范围内
         Eigen::Vector3f mNormalVector;
 
         // Best descriptor to fast matching
@@ -230,7 +233,7 @@ namespace ORB_SLAM3
 
         // Bad flag (we do not currently erase MapPoint from memory)
         bool mbBad;
-        MapPoint *mpReplaced;
+        MapPoint *mpReplaced; // 地图点被替换
         // For save relation without pointer, this is necessary for save/load function
         long long int mBackupReplacedId;
 

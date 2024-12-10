@@ -89,6 +89,8 @@ namespace ORB_SLAM3
     // note：回环线程主函数：实现主循环，持续检测闭环，并在检测到闭环时执行优化。
     void LoopClosing::Run()
     {
+        std::cout << "[LoopClosing] Thread started." << std::endl;
+
         // 表示闭环检测线程正在运行
         // 当线程结束时，会将 mbFinished 设置为 true。
         mbFinished = false;
@@ -103,6 +105,8 @@ namespace ORB_SLAM3
             // 在 LocalMapping 中通过 InsertKeyFrame 将关键帧插入闭环检测队列 mlpLoopKeyFrameQueue
             if (CheckNewKeyFrames())
             {
+                std::cout << "回环检测队列 mlpLoopKeyFrameQueue.size() = " << mlpLoopKeyFrameQueue.size() << std::endl;
+                
                 // 这部分后续未使用
                 if (mpLastCurrentKF)
                 {
@@ -315,6 +319,7 @@ namespace ORB_SLAM3
         }
 
         // 运行到这里说明有外部线程请求终止当前线程，在这个函数中执行终止当前线程的一些操作
+        std::cout << "[LoopClosing] Thread finished." << std::endl;
         SetFinish();
     }
 
@@ -323,7 +328,7 @@ namespace ORB_SLAM3
     {
         unique_lock<mutex> lock(mMutexLoopQueue);
 
-        // ! 这里第0个关键帧不能够参与到回环检测的过程中，因为第0关键帧定义了整个地图的世界坐标系
+        // ! 这里第 0 个关键帧不能够参与到回环检测的过程中，因为第 0 关键帧定义了整个地图的世界坐标系
         if (pKF->mnId != 0)
             mlpLoopKeyFrameQueue.push_back(pKF);
     }

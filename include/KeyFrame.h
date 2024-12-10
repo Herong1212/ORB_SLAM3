@@ -379,7 +379,7 @@ namespace ORB_SLAM3
         const std::vector<cv::KeyPoint> mvKeysUn;
         const std::vector<float> mvuRight; // negative value for monocular points
         const std::vector<float> mvDepth;  // negative value for monocular points
-        const cv::Mat mDescriptors;
+        const cv::Mat mDescriptors;        // 一个 OpenCV 矩阵，存储关键帧中所有特征点的 ORB 描述子，每一行对应一个特征点
 
         // BoW
         //  mBowVec 内部实际存储的是 std::map<WordId, WordValue>
@@ -391,7 +391,7 @@ namespace ORB_SLAM3
         Sophus::SE3f mTcp;
 
         // Scale
-        const int mnScaleLevels;
+        const int mnScaleLevels; // 默认为 8
         const float mfScaleFactor;
         const float mfLogScaleFactor;
         const std::vector<float> mvScaleFactors;
@@ -405,7 +405,7 @@ namespace ORB_SLAM3
         const int mnMaxY;
 
         // Preintegrated IMU measurements from previous keyframe
-        KeyFrame *mPrevKF;
+        KeyFrame *mPrevKF; // 上一帧
         KeyFrame *mNextKF;
 
         IMU::Preintegrated *mpImuPreintegrated;
@@ -459,7 +459,9 @@ namespace ORB_SLAM3
         // Grid over the image to speed up feature matching
         std::vector<std::vector<std::vector<size_t>>> mGrid;
 
+        // 存储了当前关键帧与其他关键帧之间的连接关系。mit->first 是指向另一个关键帧的指针，mit->second 是两个关键帧之间的连接权重（即它们的共视度量）。
         std::map<KeyFrame *, int> mConnectedKeyFrameWeights;
+        // 按照共视程度排序的关键帧列表，表示与当前关键帧相连接的其他关键帧。
         std::vector<KeyFrame *> mvpOrderedConnectedKeyFrames;
         std::vector<int> mvOrderedWeights;
         // For save relation without pointer, this is necessary for save/load function

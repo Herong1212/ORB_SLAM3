@@ -49,12 +49,26 @@ namespace ORB_SLAM3
     class GeometricCamera;
     class ORBextractor;
 
+    /**
+     * @brief 帧👇
+     */
     class Frame
     {
     public:
+        /**
+         * @brief Construct a new Frame object without parameter.
+         *
+         */
         Frame();
 
         // Copy constructor.
+        /**
+         * @brief 拷贝构造函数
+         * @details 复制构造函数, mLastFrame = Frame(mCurrentFrame) \n
+         * 如果不是自定以拷贝函数的话，系统自动生成的拷贝函数对于所有涉及分配内存的操作都将是浅拷贝 \n
+         * @param[in] frame 引用
+         * @note 另外注意，调用这个函数的时候，这个函数中隐藏的this指针其实是指向目标帧的
+         */
         Frame(const Frame &frame);
 
         // Constructor for stereo cameras.
@@ -173,11 +187,13 @@ namespace ORB_SLAM3
 
     private:
         // Sophus/Eigen migration
-        Sophus::SE3<float> mTcw;
-        Eigen::Matrix<float, 3, 3> mRwc;
-        Eigen::Matrix<float, 3, 1> mOw;
-        Eigen::Matrix<float, 3, 3> mRcw;
-        Eigen::Matrix<float, 3, 1> mtcw;
+
+        // 和相机位姿有关的变量
+        Sophus::SE3<float> mTcw;         ///< 相机姿态 世界坐标系到相机坐标坐标系的变换矩阵，是我们常规理解中的相机位姿，这个位姿描述了相机在空间中的位置和朝向，通常用于后续的地图构建、定位和其他计算。
+        Eigen::Matrix<float, 3, 3> mRwc; ///< Rotation from camera to world
+        Eigen::Matrix<float, 3, 1> mOw;  ///< mtwc,Translation from camera to world
+        Eigen::Matrix<float, 3, 3> mRcw; ///< Rotation from world to camera
+        Eigen::Matrix<float, 3, 1> mtcw; ///< Translation from world to camera
         bool mbHasPose;
 
         // Rcw_ not necessary as Sophus has a method for extracting the rotation matrix: Tcw_.rotationMatrix()
@@ -195,31 +211,44 @@ namespace ORB_SLAM3
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+        /// 用于重定位的 ORB 特征字典
         // Vocabulary used for relocalization.
         ORBVocabulary *mpORBvocabulary;
 
+        /// ORB特征提取器句柄，其中右侧的提取器句柄只会在【双目】输入的情况中才会被用到
         // Feature extractor. The right is used only in the stereo case.
         ORBextractor *mpORBextractorLeft, *mpORBextractorRight;
 
         // Frame timestamp.
         double mTimeStamp;
 
+        /**
+         * @name 相机的内参数
+         * @{
+         */
+
         // Calibration matrix and OpenCV distortion parameters.
+        // NOTICE 注意，这里的相机内参数其实都是类的静态成员变量；此外相机的内参数矩阵和矫正参数矩阵却是普通的成员变量，这样是否有些浪费内存空间？
         cv::Mat mK;
         Eigen::Matrix3f mK_;
-        static float fx;
-        static float fy;
-        static float cx;
-        static float cy;
-        static float invfx;
-        static float invfy;
+        static float fx;    ///< x轴方向焦距
+        static float fy;    ///< y轴方向焦距
+        static float cx;    ///< x轴方向光心偏移
+        static float cy;    ///< y轴方向光心偏移
+        static float invfx; ///< x轴方向焦距的逆
+        static float invfy; ///< x轴方向焦距的逆
+
+        // TODO 目测是 opencv 提供的图像去畸变参数矩阵的，但是其具体组成未知
         cv::Mat mDistCoef;
 
         // Stereo baseline multiplied by fx.
         float mbf;
 
+        /// 相机的基线长度，单位为米
         // Stereo baseline in meters.
         float mb;
+
+        /** @} */
 
         // Threshold close/far points. Close points are inserted from 1 view.
         // Far points are inserted as in the monocular case from 2 views.
@@ -228,6 +257,11 @@ namespace ORB_SLAM3
         // Number of KeyPoints.
         int N;
 
+        /**
+         * @name 关于特征点
+         * @{
+         */
+
         // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
         // In the stereo case, mvKeysUn is redundant as images must be rectified.
         // In the RGB-D case, RGB images can be distorted.
@@ -235,8 +269,7 @@ namespace ORB_SLAM3
         std::vector<cv::KeyPoint> mvKeysRight; // ps：（在双目模式中）存储右图像中对应的【未校正】的关键点，便于进行立体匹配。
         std::vector<cv::KeyPoint> mvKeysUn;    // ps：当前帧中，校正 mvKeys 后的关键点，注意是【校正后】！！！对于双目摄像头，一般得到的图像都是校正好的，再校正一次有点多余。
 
-        /// 每个特征点对应的 MapPoint。如果特征点没有对应的地图点，那么将存储一个【空指针】
-        std::vector<MapPoint *> mvpMapPoints;
+        std::vector<MapPoint *> mvpMapPoints; // 存储了当前帧中每个特征点对应的 MapPoint，即每个地图点在当前帧的观察。如果特征点没有对应的地图点，那么将存储一个【空指针】
         // "Monocular" keypoints have a negative value.
         std::vector<float> mvuRight; // ps：u-指代横坐标，因为最后这个坐标是通过各种拟合方法逼近出来的，所以使用 float 存储。
         std::vector<float> mvDepth;  // ps：（在 RGB-D 模式中）存储与 mvKeysUn 中每个关键点对应的深度信息。
@@ -250,13 +283,15 @@ namespace ORB_SLAM3
 
         // MapPoints associated to keypoints, NULL pointer if no association.
         // Flag to identify outlier associations.
-        std::vector<bool> mvbOutlier;
+        std::vector<bool> mvbOutlier; // 存储是外点的地图点
         int mnCloseMPs;
 
         // Keypoints are assigned to cells in a grid to reduce matching complexity when projecting MapPoints.
         static float mfGridElementWidthInv;
         static float mfGridElementHeightInv;
         std::vector<std::size_t> mGrid[FRAME_GRID_COLS][FRAME_GRID_ROWS];
+
+        /** @} */
 
         IMU::Bias mPredBias;
 
@@ -267,35 +302,58 @@ namespace ORB_SLAM3
         IMU::Calib mImuCalib;
 
         // Imu preintegration from last keyframe
+        KeyFrame *mpLastKeyFrame; // 一个指向上一关键帧的指针
+        // * 指向上一【关键帧】到当前帧之间的 IMU 数据的预积分结果
         IMU::Preintegrated *mpImuPreintegrated;
-        KeyFrame *mpLastKeyFrame;
 
         // Pointer to previous frame
-        Frame *mpPrevFrame;
+        Frame *mpPrevFrame; // 上一帧
+        // * 指向上一【普通帧】到当前帧之间的 IMU 数据的预积分结果
         IMU::Preintegrated *mpImuPreintegratedFrame;
 
+        // 类的静态成员变量，这些变量则是在整个系统开始执行的时候被初始化的——它在全局区被初始化
         // Current and Next Frame id.
-        static long unsigned int nNextId;
-        long unsigned int mnId;
+        static long unsigned int nNextId; ///< Next Frame id.
+        long unsigned int mnId;           ///< Current Frame id.
 
+        // 普通帧与自己共视程度最高的关键帧作为参考关键帧
         // Reference Keyframe.
         KeyFrame *mpReferenceKF;
 
+        /**
+         * @name 图像金字塔信息
+         * @{
+         */
         // Scale pyramid info.
-        int mnScaleLevels;
-        float mfScaleFactor;
-        float mfLogScaleFactor;
-        vector<float> mvScaleFactors;
-        vector<float> mvInvScaleFactors;
-        vector<float> mvLevelSigma2;
-        vector<float> mvInvLevelSigma2;
+        int mnScaleLevels;      ///< 图像金字塔的层数
+        float mfScaleFactor;    ///< 图像金字塔的尺度因子
+        float mfLogScaleFactor; ///< 图像金字塔的尺度因子的对数值，用于仿照特征点尺度预测地图点的尺度
+
+        vector<float> mvScaleFactors;    ///< 图像金字塔每一层的缩放因子
+        vector<float> mvInvScaleFactors; ///< 以及上面的这个变量的倒数
+        vector<float> mvLevelSigma2;     ///@todo 目前在frame.c中没有用到，无法下定论
+        vector<float> mvInvLevelSigma2;  ///< 上面变量的倒数
+
+        /** @} */
 
         // Undistorted Image Bounds (computed once).
+        /**
+         * @name 用于确定画格子时的边界
+         * @note（未校正图像的边界，只需要计算一次，因为是类的静态成员变量）
+         * @{
+         */
         static float mnMinX;
         static float mnMaxX;
         static float mnMinY;
         static float mnMaxY;
 
+        /** @} */
+
+        /**
+         * @brief 一个标志，标记是否已经进行了这些初始化计算
+         * @note 由于第一帧以及SLAM系统进行重新校正后的第一帧会有一些特殊的初始化处理操作，所以这里设置了这个变量. \n
+         * 如果这个标志被置位，说明再下一帧的帧构造函数中要进行这个“特殊的初始化操作”，如果没有被置位则不用。
+         */
         static bool mbInitialComputations;
 
         map<long unsigned int, cv::Point2f> mmProjectPoints;
@@ -324,26 +382,26 @@ namespace ORB_SLAM3
 
         bool mbIsSet;
 
-        bool mbImuPreintegrated;
+        bool mbImuPreintegrated; // 是否做完预积分的标志
 
         std::mutex *mpMutexImu;
 
     public:
         GeometricCamera *mpCamera, *mpCamera2;
 
-        // Number of KeyPoints extracted in the left and right images
+        // 左图像和右图像上提取到的特征点数量
         int Nleft, Nright;
         // Number of Non Lapping Keypoints
         int monoLeft, monoRight;
 
         // For stereo matching
-        std::vector<int> mvLeftToRightMatch, mvRightToLeftMatch;
+        std::vector<int> mvLeftToRightMatch, mvRightToLeftMatch; // 存储了每个左图像特征点在右图像中的匹配点索引
 
         // For stereo fisheye matching
         static cv::BFMatcher BFmatcher;
 
-        // Triangulated stereo observations using as reference the left camera. These are
-        // computed during ComputeStereoFishEyeMatches
+        // Triangulated stereo observations using as reference the left camera. These are computed during ComputeStereoFishEyeMatches
+        // 一个存储了所有 左图特征点的 3D 坐标 的容器（通常是一个向量数组），其中每个元素是一个 三维向量 Eigen::Vector3f，代表了某个左图特征点的 3D 坐标。
         std::vector<Eigen::Vector3f> mvStereo3Dpoints;
 
         // Grid for the right image

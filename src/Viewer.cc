@@ -233,7 +233,8 @@ namespace ORB_SLAM3
             menuShowGraph = true;
         }
 
-        float trackedImageScale = mpTracker->GetImageScale(); // ? 为什么要追踪尺度？
+        // ? 为什么要追踪尺度？
+        float trackedImageScale = mpTracker->GetImageScale();
 
         cout << "------------------------------Starting the Viewer------------------------------ " << endl;
 
@@ -401,6 +402,7 @@ namespace ORB_SLAM3
                 }
             }
 
+            cv::imshow("ORB-SLAM3-GHR: Current Frame", toShow);
             // {
             //     std::unique_lock<std::mutex> lock(mMutexPAFinsh);
 
@@ -419,7 +421,6 @@ namespace ORB_SLAM3
             //     }
             // }
 
-            cv::imshow("ORB-SLAM3-GHR: Current Frame", toShow);
             // NOTICE 注意对于我所遇到的问题，ORB-SLAM2是这样子来处理的
             cv::waitKey(mT);
 

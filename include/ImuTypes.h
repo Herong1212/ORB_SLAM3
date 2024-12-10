@@ -53,7 +53,7 @@ namespace ORB_SLAM3
         public:
             Eigen::Vector3f a;
             Eigen::Vector3f w;
-            double t;
+            double t; // 每个IMU数据点的时间戳，表示该数据点被采集的时间
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         };
 
@@ -108,18 +108,19 @@ namespace ORB_SLAM3
                 Set(Tbc, ng, na, ngw, naw);
             }
 
-            Calib(const Calib &calib);
-            Calib() { mbIsSet = false; }
+            Calib(const Calib &calib);   // Calib 类的拷贝构造函数，用于创建当前标定对象的副本。
+            Calib() { mbIsSet = false; } // Calib 类的默认构造函数，将 mbIsSet 设置为 false，表示初始时标定数据尚未设置。
 
             // void Set(const cv::Mat &cvTbc, const float &ng, const float &na, const float &ngw, const float &naw);
             void Set(const Sophus::SE3<float> &sophTbc, const float &ng, const float &na, const float &ngw, const float &naw);
 
         public:
             // Sophus/Eigen implementation
-            Sophus::SE3<float> mTcb;
-            Sophus::SE3<float> mTbc;
-            Eigen::DiagonalMatrix<float, 6> Cov, CovWalk;
-            bool mbIsSet;
+            Sophus::SE3<float> mTcb;                 // 从 IMU 坐标系到相机坐标系的变换（旋转和平移），是一个 4x4 的齐次变换矩阵
+            Sophus::SE3<float> mTbc;                 // 从相机坐标系到 IMU 坐标系的变换。它与 Tcb 是相反的变换：Tbc = Tcb.inverse()。
+            Eigen::DiagonalMatrix<float, 6> Cov;     // 加速度计的噪声协方差矩阵，通常是一个对角矩阵，描述了加速度计的测量误差。协方差矩阵的对角元素通常表示每个轴（例如 X、Y、Z 三轴）的噪声水平
+            Eigen::DiagonalMatrix<float, 6> CovWalk; // 加速度计的随机游走噪声协方差，描述了加速度计随时间推移产生的漂移或累积误差（通常加速度计会出现随机游走，导致长期内有漂移现象）
+            bool mbIsSet;                            // 标记是否已经正确设置了 IMU 的标定数据
         };
 
         // Integration of 1 gyro measurement
@@ -210,14 +211,15 @@ namespace ORB_SLAM3
             float dT;
             Eigen::Matrix<float, 15, 15> C;
             Eigen::Matrix<float, 15, 15> Info;
-            Eigen::DiagonalMatrix<float, 6> Nga, NgaWalk;
+            Eigen::DiagonalMatrix<float, 6> Nga;     // 加速度计的噪声协方差矩阵
+            Eigen::DiagonalMatrix<float, 6> NgaWalk; // 加速度计 随时间变化的噪声协方差矩阵（通常是加速度计的随机游走噪声）
 
             // Values for the original bias (when integration was computed)
             Bias b;
             Eigen::Matrix3f dR;
             Eigen::Vector3f dV, dP;
             Eigen::Matrix3f JRg, JVg, JVa, JPg, JPa;
-            Eigen::Vector3f avgA, avgW;
+            Eigen::Vector3f avgA, avgW; // avgA 和 avgW 分别是当前帧的平均加速度和平均角速度（通常是从 IMU 数据中计算得到的）
 
         private:
             // Updated bias

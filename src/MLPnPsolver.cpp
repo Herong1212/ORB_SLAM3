@@ -52,44 +52,68 @@
 
 namespace ORB_SLAM3
 {
+    // ps：构造函数
+    /**
+     * @brief MLPnP 构造函数
+     *
+     * @param[in] F                         输入帧的数据
+     * @param[in] vpMapPointMatches         待匹配的特征点，是当前帧和候选关键帧用 BoW 进行快速匹配的结果
+     * @param[in] mnInliersi                内点的个数
+     * @param[in] mnIterations              Ransac迭代次数
+     * @param[in] mnBestInliers             最佳内点数
+     * @param[in] N                         所有2D点的个数
+     * @param[in] mpCamera                  相机模型，利用该变量对3D点进行投影
+     */
     MLPnPsolver::MLPnPsolver(const Frame &F, const vector<MapPoint *> &vpMapPointMatches) : mnInliersi(0), mnIterations(0), mnBestInliers(0), N(0), mpCamera(F.mpCamera)
     {
         mvpMapPointMatches = vpMapPointMatches;
-        mvBearingVecs.reserve(F.mvpMapPoints.size());
-        mvP2D.reserve(F.mvpMapPoints.size());
-        mvSigma2.reserve(F.mvpMapPoints.size());
-        mvP3Dw.reserve(F.mvpMapPoints.size());
-        mvKeyPointIndices.reserve(F.mvpMapPoints.size());
-        mvAllIndices.reserve(F.mvpMapPoints.size());
+        mvBearingVecs.reserve(F.mvpMapPoints.size());     // 初始化3D点的单位向量
+        mvP2D.reserve(F.mvpMapPoints.size());             // 初始化3D点的投影点
+        mvSigma2.reserve(F.mvpMapPoints.size());          // 初始化卡方检验中的sigma值
+        mvP3Dw.reserve(F.mvpMapPoints.size());            // 初始化3D点坐标
+        mvKeyPointIndices.reserve(F.mvpMapPoints.size()); // 初始化3D点的索引值
+        mvAllIndices.reserve(F.mvpMapPoints.size());      // 初始化所有索引值
 
+        // 一些必要的初始化操作
         int idx = 0;
         for (size_t i = 0, iend = mvpMapPointMatches.size(); i < iend; i++)
         {
             MapPoint *pMP = vpMapPointMatches[i];
 
+            // 如果 pMP 存在，则接下来初始化一些参数，否则什么都不做
             if (pMP)
             {
+                // 判断是否是坏点
                 if (!pMP->isBad())
                 {
+                    // 如果记录的点个数超过总数，则不做任何事情，否则继续记录
                     if (i >= F.mvKeysUn.size())
                         continue;
+
                     const cv::KeyPoint &kp = F.mvKeysUn[i];
 
+                    // 保存3D点的投影点
                     mvP2D.push_back(kp.pt);
+
+                    // 保存卡方检验中的sigma值
                     mvSigma2.push_back(F.mvLevelSigma2[kp.octave]);
 
+                    // 特征点投影，并计算单位向量
                     // Bearing vector should be normalized
                     cv::Point3f cv_br = mpCamera->unproject(kp.pt);
                     cv_br /= cv_br.z;
                     bearingVector_t br(cv_br.x, cv_br.y, cv_br.z);
                     mvBearingVecs.push_back(br);
 
-                    // 3D coordinates
+                    // 获取当前特征点的 3D 坐标
                     Eigen::Matrix<float, 3, 1> posEig = pMP->GetWorldPos();
                     point_t pos(posEig(0), posEig(1), posEig(2));
                     mvP3Dw.push_back(pos);
 
+                    // 记录当前特征点的索引值，挑选后的
                     mvKeyPointIndices.push_back(i);
+
+                    // 记录所有特征点的索引值
                     mvAllIndices.push_back(idx);
 
                     idx++;
@@ -97,6 +121,7 @@ namespace ORB_SLAM3
             }
         }
 
+        // 设置 RANSAC 参数
         SetRansacParameters();
     }
 
@@ -228,6 +253,18 @@ namespace ORB_SLAM3
         return false;
     }
 
+    // 设置RANSAC迭代的参数
+    /**
+     * @brief 设置RANSAC迭代的参数
+     *
+     * @param[in] probability       模型最大概率值，默认0.9
+     * @param[in] minInliers        内点的最小阈值，默认8
+     * @param[in] maxIterations     最大迭代次数，默认300
+     * @param[in] minSet            最小集，每次采样六个点，即最小集应该设置为 6，论文里面写着I > 5
+     * @param[in] epsilon           理论最少内点个数，这里是按照总数的比例计算，所以 epsilon 是比例，默认是0.4
+     * @param[in] th2               卡方检验阈值
+     *
+     */
     void MLPnPsolver::SetRansacParameters(double probability, int minInliers, int maxIterations, int minSet, float epsilon, float th2)
     {
         mRansacProb = probability;
@@ -238,8 +275,9 @@ namespace ORB_SLAM3
 
         N = mvP2D.size(); // number of correspondences
 
-        mvbInliersi.resize(N);
+        mvbInliersi.resize(N); // 是否是内点的标记位
 
+        // 计算最少个数点，选择(给定内点数, 最小集, 理论内点数)的最小值
         // Adjust Parameters according to number of correspondences
         int nMinInliers = N * mRansacEpsilon;
         if (nMinInliers < mRansacMinInliers)
@@ -248,9 +286,11 @@ namespace ORB_SLAM3
             nMinInliers = minSet;
         mRansacMinInliers = nMinInliers;
 
+        // 根据最终得到的"最小内点数"来调整 内点数/总体数 比例 epsilon
         if (mRansacEpsilon < (float)mRansacMinInliers / N)
             mRansacEpsilon = (float)mRansacMinInliers / N;
 
+        // 根据给出的各种参数计算RANSAC的理论迭代次数,并且敲定最终在迭代过程中使用的RANSAC最大迭代次数
         // Set RANSAC iterations according to probability, epsilon, and max iterations
         int nIterations;
 
@@ -261,11 +301,13 @@ namespace ORB_SLAM3
 
         mRansacMaxIts = max(1, min(nIterations, mRansacMaxIts));
 
-        mvMaxError.resize(mvSigma2.size());
+        // 计算不同图层上的特征点在进行内点检验的时候，所使用的不同判断误差阈值
+        mvMaxError.resize(mvSigma2.size()); // 层数
         for (size_t i = 0; i < mvSigma2.size(); i++)
-            mvMaxError[i] = mvSigma2[i] * th2;
+            mvMaxError[i] = mvSigma2[i] * th2; // 不同的尺度，设置不同的最大偏差
     }
 
+    // 通过之前求解的(R t)检查哪些3D-2D点对属于inliers
     void MLPnPsolver::CheckInliers()
     {
         mnInliersi = 0;
