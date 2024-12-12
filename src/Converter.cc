@@ -20,7 +20,7 @@
 
 namespace ORB_SLAM3
 {
-
+    // 将一个 cv::Mat 类型的描述符矩阵（Descriptors）转换成一个 std::vector<cv::Mat> 类型的向量，其中每个元素是 Descriptors 矩阵的一个行（cv::Mat 类型）。
     std::vector<cv::Mat> Converter::toDescriptorVector(const cv::Mat &Descriptors)
     {
         std::vector<cv::Mat> vDesc;
@@ -31,9 +31,11 @@ namespace ORB_SLAM3
         return vDesc;
     }
 
+    // ps1：cvT 是一个 4x4 的 【cv::Mat 类型矩阵】，包含了一个 3D 变换（旋转和平移）
     g2o::SE3Quat Converter::toSE3Quat(const cv::Mat &cvT)
     {
         Eigen::Matrix<double, 3, 3> R;
+
         R << cvT.at<float>(0, 0), cvT.at<float>(0, 1), cvT.at<float>(0, 2),
             cvT.at<float>(1, 0), cvT.at<float>(1, 1), cvT.at<float>(1, 2),
             cvT.at<float>(2, 0), cvT.at<float>(2, 1), cvT.at<float>(2, 2);
@@ -43,6 +45,7 @@ namespace ORB_SLAM3
         return g2o::SE3Quat(R, t);
     }
 
+    // ps2：T 是一个 Sophus::SE3f 类型的对象，表示一个 3D 位姿，包含了【单位四元数】表示的旋转和一个平移向量。
     g2o::SE3Quat Converter::toSE3Quat(const Sophus::SE3f &T)
     {
         return g2o::SE3Quat(T.unit_quaternion().cast<double>(), T.translation().cast<double>());
@@ -150,9 +153,12 @@ namespace ORB_SLAM3
         return cvMat.clone();
     }
 
+    // 将旋转矩阵 R 和平移向量 t 转换为一个 4x4 的齐次变换矩阵（cv::Mat 类型）。
     cv::Mat Converter::toCvSE3(const Eigen::Matrix<double, 3, 3> &R, const Eigen::Matrix<double, 3, 1> &t)
     {
+        // 一个对角线上全为 1，其余元素为 0 的矩阵
         cv::Mat cvMat = cv::Mat::eye(4, 4, CV_32F);
+
         for (int i = 0; i < 3; i++)
         {
             for (int j = 0; j < 3; j++)
@@ -168,6 +174,7 @@ namespace ORB_SLAM3
         return cvMat.clone();
     }
 
+    // 把不同类型的三维向量（cv::Mat 或 cv::Point3f）转换成 Eigen 库的三维向量（Eigen::Matrix<double, 3, 1>）
     Eigen::Matrix<double, 3, 1> Converter::toVector3d(const cv::Mat &cvVector)
     {
         Eigen::Matrix<double, 3, 1> v;
@@ -184,6 +191,7 @@ namespace ORB_SLAM3
         return v;
     }
 
+    // 把不同类型的三维向量（cv::Mat 或 cv::Point3f）转换成 Eigen 库的三维向量（Eigen::Matrix<double, 3, 1>）
     Eigen::Matrix<double, 3, 1> Converter::toVector3d(const cv::Point3f &cvPoint)
     {
         Eigen::Matrix<double, 3, 1> v;
@@ -236,6 +244,7 @@ namespace ORB_SLAM3
         return M;
     }
 
+    // 将一个 3x3 的旋转矩阵（cv::Mat 类型）转换为四元数表示，并返回一个包含四个浮点数的 std::vector<float> 类型的结果。
     std::vector<float> Converter::toQuaternion(const cv::Mat &M)
     {
         Eigen::Matrix<double, 3, 3> eigMat = toMatrix3d(M);

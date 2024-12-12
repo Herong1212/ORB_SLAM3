@@ -6,7 +6,7 @@
 // 构造函数：加载 YOLOv5 模型并准备与之相关的一些数据结构
 YoloDetection::YoloDetection()
 {
-    mModule = torch::jit::load("/home/dsg/orbslam3_ghr/src/ORB_SLAM3/yolov5s.torchscript.pt");
+    mModule = torch::jit::load("yolov5s.torchscript.pt");
 
     std::ifstream f("coco.names");
     std::string name = "";

@@ -45,4 +45,4 @@ cd build
 # cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake .. -DCMAKE_BUILD_TYPE=Release
 # make -j4
-make -j4 # 默认使用系统上的所有 CPU 核心进行并行编译。
+make -j # 默认使用系统上的所有 CPU 核心进行并行编译。

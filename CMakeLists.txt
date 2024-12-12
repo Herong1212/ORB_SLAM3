@@ -41,11 +41,10 @@ endif()
 add_definitions(-w)
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
-# set(CMAKE_PREFIX_PATH "/usr/local/lib/libtorch")
+
 set(CMAKE_PREFIX_PATH ${PROJECT_SOURCE_DIR}/Thirdparty/libtorch)
 message(STATUS "CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
 message("")
-
 find_package(Torch REQUIRED)
 message("")
 message("Torch VERSION:" ${Torch_VERSION})
@@ -150,8 +149,8 @@ add_library(${PROJECT_NAME} SHARED
     include/SerializationUtils.h
     include/Config.h
     include/Settings.h
-    # include/PointCloudMapper.h
     include/YoloDetect.h
+    # include/PointCloudMapper.h
 )
 
 add_subdirectory(Thirdparty/g2o)

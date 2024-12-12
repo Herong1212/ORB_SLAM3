@@ -1258,6 +1258,7 @@ namespace ORB_SLAM3
         else
             cout << "- color order: BGR (ignored if grayscale)" << endl;
 
+        // ps：ThDepth 其实就是表示基线长度的多少倍，用来判断一个 3D 点远/近的阈值 mbf * 35 / fx
         if (mSensor == System::STEREO || mSensor == System::RGBD || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
         {
             float fx = mpCamera->getParameter(0);
@@ -1276,6 +1277,7 @@ namespace ORB_SLAM3
             }
         }
 
+        // ps：深度相机 disparity 转化为 depth 时的因子，这个地方出过很大问题！
         if (mSensor == System::RGBD || mSensor == System::IMU_RGBD)
         {
             cv::FileNode node = fSettings["DepthMapFactor"];
@@ -1309,6 +1311,7 @@ namespace ORB_SLAM3
         int nFeatures, nLevels, fIniThFAST, fMinThFAST;
         float fScaleFactor;
 
+        // 每一帧提取的特征点数：1000
         cv::FileNode node = fSettings["ORBextractor.nFeatures"];
         if (!node.empty() && node.isInt())
         {
@@ -1320,6 +1323,7 @@ namespace ORB_SLAM3
             b_miss_params = true;
         }
 
+        // 图像建立金字塔时的变化尺度：1.2
         node = fSettings["ORBextractor.scaleFactor"];
         if (!node.empty() && node.isReal())
         {
@@ -1331,6 +1335,7 @@ namespace ORB_SLAM3
             b_miss_params = true;
         }
 
+        // 尺度金字塔的层数：8
         node = fSettings["ORBextractor.nLevels"];
         if (!node.empty() && node.isInt())
         {
@@ -1342,6 +1347,7 @@ namespace ORB_SLAM3
             b_miss_params = true;
         }
 
+        // 提取fast特征点的默认阈值：20
         node = fSettings["ORBextractor.iniThFAST"];
         if (!node.empty() && node.isInt())
         {
@@ -1353,6 +1359,7 @@ namespace ORB_SLAM3
             b_miss_params = true;
         }
 
+        // 如果默认阈值提取不出足够fast特征点，则使用最小阈值：8
         node = fSettings["ORBextractor.minThFAST"];
         if (!node.empty() && node.isInt())
         {
@@ -1369,11 +1376,14 @@ namespace ORB_SLAM3
             return false;
         }
 
+        // tracking 过程都会用到 mpORBextractorLeft 作为特征点提取器
         mpORBextractorLeft = new ORBextractor(nFeatures, fScaleFactor, nLevels, fIniThFAST, fMinThFAST);
 
+        // 如果是双目，tracking 过程中还会用用到 mpORBextractorRight 作为右目特征点提取器
         if (mSensor == System::STEREO || mSensor == System::IMU_STEREO)
             mpORBextractorRight = new ORBextractor(nFeatures, fScaleFactor, nLevels, fIniThFAST, fMinThFAST);
 
+        // 在单目初始化的时候，会用 mpIniORBextractor 来作为特征点提取器
         if (mSensor == System::MONOCULAR || mSensor == System::IMU_MONOCULAR)
             mpIniORBextractor = new ORBextractor(5 * nFeatures, fScaleFactor, nLevels, fIniThFAST, fMinThFAST);
 
@@ -4792,7 +4802,7 @@ namespace ORB_SLAM3
         if (mSensor != System::MONOCULAR && mSensor != System::IMU_MONOCULAR)
         {
             int N = (mCurrentFrame.Nleft == -1) ? mCurrentFrame.N : mCurrentFrame.Nleft;
-            
+
             int outliers = 0;
             for (int i = 0; i < N; i++)
             {

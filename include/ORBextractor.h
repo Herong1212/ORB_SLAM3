@@ -90,7 +90,7 @@ namespace ORB_SLAM3
             return mvInvLevelSigma2;
         }
 
-        std::vector<cv::Mat> mvImagePyramid;
+        std::vector<cv::Mat> mvImagePyramid; // 存储金字塔中每一层的图像
 
         // TODO 一个存储动态物体区域的容器
         std::vector<cv::Rect2i> mvDynamicArea;
